@@ -96,6 +96,7 @@ dev = [
     "tomlkit>=0.13.3",
     "ipdb>=0.13.13",
     "ipython>=8.18.1",
+    "pygount>=3.2.0",
 ]
 
 [tool.mypy]
