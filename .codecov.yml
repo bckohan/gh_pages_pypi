@@ -1,0 +1,3 @@
+coverage:
+  fixes:
+    - "__init__.py::gh_pages_pypi/__init__.py"

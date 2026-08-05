@@ -1,0 +1,160 @@
+[project]
+name = "gh-pages-pypi"
+version = "0.1.0"
+description = "Serve a PyPI-compatible package index from GitHub Pages, built from GitHub release assets."
+requires-python = ">=3.10,<4.0"
+authors = [
+  {name = "Brian Kohan", email = "bckohan@gmail.com"},
+]
+license = "MIT"
+license-files = [ "LICENSE" ]
+
+readme = "README.md"
+repository = "https://github.com/bckohan/gh_pages_pypi"
+homepage = "https://gh-pages-pypi.readthedocs.io"
+keywords = []
+dependencies = [
+    "typer>=0.15",
+    "jinja2>=3.1",
+]
+classifiers = [
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Development Status :: 1 - Planning",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+
+    "Natural Language :: English",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
+    "Topic :: Software Development :: Libraries",
+]
+
+[project.scripts]
+gh-pages-pypi = "gh_pages_pypi.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+package = true
+
+[tool.uv.sources]
+gh-pages-pypi-demo-lib = { path = "packages/demo-lib", editable = true }
+gh-pages-pypi-demo-app = { path = "packages/demo-app", editable = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gh_pages_pypi"]
+
+[project.urls]
+"Homepage"      = "https://gh-pages-pypi.readthedocs.io"
+"Documentation" = "https://gh-pages-pypi.readthedocs.io"
+"Repository"    = "https://github.com/bckohan/gh_pages_pypi"
+"Issues"        = "https://github.com/bckohan/gh_pages_pypi/issues"
+"Changelog"     = "https://gh-pages-pypi.readthedocs.io/en/latest/changelog.html"
+
+[dependency-groups]
+docs = [
+    "doc8>=1.1.2",
+    "furo>=2024.8.6",
+    "readme-renderer[md]>=44.0",
+    "sphinx>=8.0.0",
+    "sphinx-autobuild>=2024.10.3",
+    "sphinx-tabs>=3.4.7",
+]
+typing = [
+    "pyright>=1.1.390",
+    "mypy>=1.19.1",
+]
+lint = [
+    "ruff>=0.15.0",
+    "readme-renderer[md]>=43.0",
+    "doc8>=1.1.2",
+    "bandit[toml,sarif]>=1.7.10"
+]
+coverage  = ["coverage[toml]>=7.6.1"]
+test = [
+    { include-group = "coverage" },
+    "pytest>=8.3.4",
+    "pytest-cov>=6.0.0",
+    "packaging>=24.2",
+    "gh-pages-pypi-demo-lib",
+    "gh-pages-pypi-demo-app",
+]
+dev = [
+    { include-group = "typing" },
+    { include-group = "test" },
+    { include-group = "docs" },
+    { include-group = "lint" },
+    "packaging>=24.2",
+    "tomlkit>=0.13.3",
+    "ipdb>=0.13.13",
+    "ipython>=8.18.1",
+]
+
+[tool.mypy]
+check_untyped_defs = true
+ignore_missing_imports = true
+mypy_path = ["src"]
+packages = ["gh_pages_pypi"]
+
+[tool.pyright]
+pythonVersion = "3.10"
+typeCheckingMode = "basic"
+include = ["src/gh_pages_pypi"]
+reportMissingImports = true
+reportMissingTypeStubs = false
+reportUnusedImport = true
+reportDuplicateImport = true
+
+[tool.doc8]
+max-line-length = 100
+sphinx = true
+
+[tool.pytest.ini_options]
+python_files = "test*.py"
+norecursedirs = "*.egg .eggs dist build docs .tox .git __pycache__"
+addopts = [
+    "--strict-markers",
+    "--cov=gh_pages_pypi",
+    "--cov-branch",
+    "--cov-report=term-missing:skip-covered",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["gh_pages_pypi"]
+concurrency = ["thread", "multiprocessing"]
+parallel = true
+relative_files = true
+command_line = "-m pytest --cov=gh_pages_pypi"
+
+[tool.coverage.paths]
+source = ["gh_pages_pypi"]
+
+[tool.ruff]
+line-length = 88
+exclude = ["doc", "dist", "docs"]
+target-version = "py310"
+
+[tool.ruff.lint]
+exclude = ["tests/**/*"]
+
+[tool.bandit]
+targets = ["src"]
+exclude_dirs = [
+    "./tests",
+    "./.venv",
+    "./doc",
+]
+
+skips = [
+    "B101",  # assert_used - assertions are fine in tests
+    "B110",  # Try, Except, Pass detected - these are intentional
+]

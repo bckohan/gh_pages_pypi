@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>{{ repo }} package index</title>
+  </head>
+  <body>
+    <h1>{{ repo }} package index</h1>
+    <p>A PyPI-compatible (PEP 503) package index served by GitHub Pages.
+       Packages are hosted as GitHub release assets.</p>
+    <p>Install packages with:</p>
+    <pre>pip install --extra-index-url {{ index_url }} PACKAGE</pre>
+    <p>Available packages:</p>
+    <ul>
+{% for project in projects %}      <li><code>{{ project }}</code></li>
+{% endfor %}    </ul>
+    <p><a href="simple/">Browse the simple index</a></p>
+  </body>
+</html>

@@ -1,11 +1,4 @@
-import sys
-from pathlib import Path
-
-import pytest
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-
-import build_index
+from gh_pages_pypi import index
 
 FIXTURE_RELEASES = [
     {
@@ -52,23 +45,25 @@ def fake_hash(url):
 
 
 def test_normalize():
-    assert build_index.normalize("Gh_Pages.PyPI--Demo") == "gh-pages-pypi-demo"
+    assert index.normalize("Gh_Pages.PyPI--Demo") == "gh-pages-pypi-demo"
 
 
 def test_project_name_from_filename():
     assert (
-        build_index.project_name_from_filename("gh_pages_pypi_demo_lib-1.0.0-py3-none-any.whl")
+        index.project_name_from_filename(
+            "gh_pages_pypi_demo_lib-1.0.0-py3-none-any.whl"
+        )
         == "gh_pages_pypi_demo_lib"
     )
     assert (
-        build_index.project_name_from_filename("gh_pages_pypi_demo_lib-1.0.0.tar.gz")
+        index.project_name_from_filename("gh_pages_pypi_demo_lib-1.0.0.tar.gz")
         == "gh_pages_pypi_demo_lib"
     )
-    assert build_index.project_name_from_filename("release-notes.txt") is None
+    assert index.project_name_from_filename("release-notes.txt") is None
 
 
 def test_collect_projects():
-    projects = build_index.collect_projects(FIXTURE_RELEASES, hash_url=fake_hash)
+    projects = index.collect_projects(FIXTURE_RELEASES, hash_url=fake_hash)
     assert sorted(projects) == ["gh-pages-pypi-demo-app", "gh-pages-pypi-demo-lib"]
     lib_files = projects["gh-pages-pypi-demo-lib"]
     assert [f["filename"] for f in lib_files] == [
@@ -79,8 +74,8 @@ def test_collect_projects():
 
 
 def test_write_site(tmp_path):
-    projects = build_index.collect_projects(FIXTURE_RELEASES, hash_url=fake_hash)
-    build_index.write_site(projects, tmp_path, "bckohan/gh_pages_pypi")
+    projects = index.collect_projects(FIXTURE_RELEASES, hash_url=fake_hash)
+    index.write_site(projects, tmp_path, "bckohan/gh_pages_pypi")
 
     landing = (tmp_path / "index.html").read_text()
     assert "https://bckohan.github.io/gh_pages_pypi/simple/" in landing
@@ -89,15 +84,9 @@ def test_write_site(tmp_path):
     assert '<a href="gh-pages-pypi-demo-lib/">' in root
     assert '<a href="gh-pages-pypi-demo-app/">' in root
 
-    lib_page = (tmp_path / "simple" / "gh-pages-pypi-demo-lib" / "index.html").read_text()
+    lib_page = (
+        tmp_path / "simple" / "gh-pages-pypi-demo-lib" / "index.html"
+    ).read_text()
     assert "#sha256=cafef00d" in lib_page
     assert "gh_pages_pypi_demo_lib-1.0.0-py3-none-any.whl</a>" in lib_page
-
-
-def test_main_fails_with_no_packages(tmp_path, monkeypatch):
-    monkeypatch.setattr(build_index, "fetch_releases", lambda repo, token: [])
-    with pytest.raises(SystemExit) as excinfo:
-        build_index.main(
-            ["--repo", "bckohan/gh_pages_pypi", "--out", str(tmp_path), "--token", "x"]
-        )
-    assert "no package assets" in str(excinfo.value)
+    assert '<meta name="pypi:repository-version" content="1.0"' in lib_page

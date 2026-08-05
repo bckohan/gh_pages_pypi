@@ -1,0 +1,88 @@
+# Builds a package and publishes it as a GitHub Release when a tag like
+# demo-lib-v1.0.0 or demo-app-v1.2.3 is pushed. The release assets become
+# the package files served by the GitHub Pages index.
+name: demo-release
+
+on:
+  push:
+    tags:
+      - "demo-*-v*"
+
+permissions: {} # no default permissions; the job declares only what it needs
+
+# stop previous release runs if the tag is recreated
+concurrency:
+  group: demo-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the GitHub Release and upload its assets
+      actions: write # to dispatch the pages workflow
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+
+      - name: Parse tag into package and version
+        id: parse
+        run: |
+          PACKAGE="${GITHUB_REF_NAME%-v*}"
+          VERSION="${GITHUB_REF_NAME##*-v}"
+          if [ ! -d "packages/${PACKAGE}" ]; then
+            echo "::error::unknown package '${PACKAGE}' (no packages/${PACKAGE} directory)"
+            exit 1
+          fi
+          echo "package=${PACKAGE}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify tag version matches pyproject.toml
+        env:
+          PACKAGE: ${{ steps.parse.outputs.package }}
+          VERSION: ${{ steps.parse.outputs.version }}
+        run: |
+          python - <<'EOF'
+          import os, sys, tomllib
+          from pathlib import Path
+
+          package, version = os.environ["PACKAGE"], os.environ["VERSION"]
+          pyproject = Path("packages") / package / "pyproject.toml"
+          actual = tomllib.loads(pyproject.read_text())["project"]["version"]
+          if actual != version:
+              sys.exit(f"tag version {version} != {pyproject} version {actual}")
+          EOF
+
+      # Tag-derived values always flow through env vars, never ${{ }} inside
+      # `run:` — interpolating them into shell text is the classic Actions
+      # injection pitfall.
+      - name: Build wheel and sdist
+        env:
+          PACKAGE: ${{ steps.parse.outputs.package }}
+        run: |
+          pip install build
+          python -m build "packages/${PACKAGE}"
+
+      - name: Create GitHub Release with artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE: ${{ steps.parse.outputs.package }}
+          VERSION: ${{ steps.parse.outputs.version }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            packages/"${PACKAGE}"/dist/* \
+            --title "$GITHUB_REF_NAME" \
+            --notes "Release ${VERSION} of ${PACKAGE}"
+
+      # Releases created with GITHUB_TOKEN do not fire `release` events in
+      # other workflows (GitHub suppresses them to prevent recursion), so
+      # trigger the Pages rebuild explicitly.
+      - name: Rebuild the Pages index
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml

@@ -1,80 +1,170 @@
-# Builds a package and publishes it as a GitHub Release when a tag like
-# demo-lib-v1.0.0 or demo-app-v1.2.3 is pushed. The release assets become
-# the package files served by the GitHub Pages index.
-name: release
+name: Publish Release
+
+permissions:
+  contents: read
+
+concurrency:
+  # stop previous release runs if tag is recreated
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
 
 on:
   push:
     tags:
-      - "demo-*-v*"
-
-permissions:
-  contents: write
-  actions: write # to dispatch the pages workflow
+      - "v[0-9]*.[0-9]*.[0-9]*" # only publish on version tags (e.g. v1.0.0)
 
 jobs:
-  release:
+  lint:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/lint.yml
+
+  test:
+    permissions:
+      contents: read
+      id-token: write # to allow codecov oidc upload
+    uses: ./.github/workflows/test.yml
+
+  build:
+    name: Build Package
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      PACKAGE_NAME: ${{ steps.set-package.outputs.package_name }}
+      RELEASE_VERSION: ${{ steps.set-package.outputs.release_version }}
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          python-version: "3.12"
-
-      - name: Parse tag into package and version
-        id: parse
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.14" # for tomllib
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990
+        with:
+          enable-cache: false
+          restore-cache: false
+          save-cache: false
+      - name: Setup Just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3
+      - name: Verify Tag
         run: |
-          PACKAGE="${GITHUB_REF_NAME%-v*}"
-          VERSION="${GITHUB_REF_NAME##*-v}"
-          if [ ! -d "packages/${PACKAGE}" ]; then
-            echo "::error::unknown package '${PACKAGE}' (no packages/${PACKAGE} directory)"
-            exit 1
-          fi
-          echo "package=${PACKAGE}" >> "$GITHUB_OUTPUT"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          echo "Verifying tag $TAG_NAME..."
+          # if a tag was deleted and recreated we may have the old one cached
+          # be sure that we're publishing the current tag!
+          git fetch --force origin refs/tags/$TAG_NAME:refs/tags/$TAG_NAME
 
-      - name: Verify tag version matches pyproject.toml
-        env:
-          PACKAGE: ${{ steps.parse.outputs.package }}
-          VERSION: ${{ steps.parse.outputs.version }}
+          # verify signature
+          curl -sL "https://github.com/${GITHUB_ACTOR}.gpg" | gpg --import
+          git tag -v "$TAG_NAME"
+
+          # verify version
+          RELEASE_VERSION=$(just validate_version $TAG_NAME)
+
+          # export the release version
+          echo "RELEASE_VERSION=${RELEASE_VERSION}" >> $GITHUB_ENV
+      - name: Build the binary wheel and a source tarball
+        run: just build
+      - name: Store the distribution packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: python-package-distributions
+          path: dist/
+      - name: Set Package Name
+        id: set-package
         run: |
-          python - <<'EOF'
-          import os, sys, tomllib
-          from pathlib import Path
+          PACKAGE_NAME=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['name'])")
+          echo "package_name=${PACKAGE_NAME}" >> $GITHUB_OUTPUT
 
-          package, version = os.environ["PACKAGE"], os.environ["VERSION"]
-          pyproject = Path("packages") / package / "pyproject.toml"
-          actual = tomllib.loads(pyproject.read_text())["project"]["version"]
-          if actual != version:
-              sys.exit(f"tag version {version} != {pyproject} version {actual}")
-          EOF
+  publish-to-testpypi:
+    name: Publish to TestPyPI
+    needs:
+      - build
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/project/${{ needs.build.outputs.PACKAGE_NAME }}
+    permissions:
+      id-token: write # IMPORTANT: mandatory for trusted publishing
+    steps:
+      - name: Download all the dists
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: python-package-distributions
+          path: dist/
+      - name: Publish distribution to TestPyPI
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
 
-      # Tag-derived values always flow through env vars, never ${{ }} inside
-      # `run:` — interpolating them into shell text is the classic Actions
-      # injection pitfall.
-      - name: Build wheel and sdist
+  publish-to-pypi:
+    name: Publish to PyPI
+    needs:
+      - lint
+      - test
+      - build
+      - publish-to-testpypi
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/${{ needs.build.outputs.PACKAGE_NAME }}
+    permissions:
+      id-token: write # IMPORTANT: mandatory for trusted publishing
+    steps:
+      - name: Download all the dists
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: python-package-distributions
+          path: dist/
+      - name: Publish distribution to PyPI
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b
+
+  github-release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs:
+      - lint
+      - test
+      - build
+    permissions:
+      contents: write # IMPORTANT: mandatory for making GitHub Releases
+      id-token: write # IMPORTANT: mandatory for sigstore
+
+    steps:
+      - name: Download all the dists
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: python-package-distributions
+          path: dist/
+      - name: Sign the dists with Sigstore
+        uses: sigstore/gh-action-sigstore-python@5b79a39c381910c090341a2c9b0bf022c8b387e1
+        with:
+          inputs: >-
+            ./dist/*.tar.gz
+            ./dist/*.whl
+      - name: Create GitHub Release
         env:
-          PACKAGE: ${{ steps.parse.outputs.package }}
-        run: |
-          pip install build
-          python -m build "packages/${PACKAGE}"
-
-      - name: Create GitHub Release with artifacts
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: >-
+          gh release create
+          "$GITHUB_REF_NAME"
+          --repo "$GITHUB_REPOSITORY"
+          --generate-notes
+      - name: Upload artifact signatures to GitHub Release
         env:
-          GH_TOKEN: ${{ github.token }}
-          PACKAGE: ${{ steps.parse.outputs.package }}
-          VERSION: ${{ steps.parse.outputs.version }}
-        run: |
-          gh release create "$GITHUB_REF_NAME" \
-            packages/"${PACKAGE}"/dist/* \
-            --title "$GITHUB_REF_NAME" \
-            --notes "Release ${VERSION} of ${PACKAGE}"
-
-      # Releases created with GITHUB_TOKEN do not fire `release` events in
-      # other workflows (GitHub suppresses them to prevent recursion), so
-      # trigger the Pages rebuild explicitly.
-      - name: Rebuild the Pages index
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run pages.yml
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        # Upload to GitHub Release using the `gh` CLI.
+        # `dist/` contains the built packages, and the
+        # sigstore-produced signatures and certificates.
+        run: >-
+          gh release upload
+          "$GITHUB_REF_NAME" dist/**
+          --repo "$GITHUB_REPOSITORY"

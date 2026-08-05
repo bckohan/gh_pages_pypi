@@ -1,93 +1,122 @@
-# gh_pages_pypi
+# gh-pages-pypi
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![PyPI version](https://badge.fury.io/py/gh-pages-pypi.svg)](https://pypi.python.org/pypi/gh-pages-pypi/)
+[![PyPI pyversions](https://img.shields.io/pypi/pyversions/gh-pages-pypi.svg)](https://pypi.python.org/pypi/gh-pages-pypi/)
+[![PyPI status](https://img.shields.io/pypi/status/gh-pages-pypi.svg)](https://pypi.python.org/pypi/gh-pages-pypi)
+[![Documentation Status](https://readthedocs.org/projects/gh-pages-pypi/badge/?version=latest)](http://gh-pages-pypi.readthedocs.io/?badge=latest/)
+[![Code Cov](https://codecov.io/gh/bckohan/gh_pages_pypi/branch/main/graph/badge.svg)](https://codecov.io/gh/bckohan/gh_pages_pypi)
+[![Test Status](https://github.com/bckohan/gh_pages_pypi/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/bckohan/gh_pages_pypi/actions/workflows/test.yml?query=branch:main)
+[![Lint Status](https://github.com/bckohan/gh_pages_pypi/actions/workflows/lint.yml/badge.svg?branch=main)](https://github.com/bckohan/gh_pages_pypi/actions/workflows/lint.yml?query=branch:main)
 
-A demo of how to use **GitHub Pages as a PyPI-compatible package index**,
-with package files hosted as **GitHub Release assets**. Nothing is
-published to pypi.org and no index server runs anywhere — it's all static
-HTML, rebuilt automatically on every release.
+Serve a **PyPI-compatible package index from GitHub Pages**, built from
+**GitHub release assets**. No index server, nothing published to pypi.org —
+just static PEP 503 HTML, rebuilt automatically on every release.
 
-## Try it
+This repository is both the tool and its own demo: the index at
+[bckohan.github.io/gh_pages_pypi](https://bckohan.github.io/gh_pages_pypi/)
+is built by this tool from this repo's releases.
+
+## Installation
+
+```bash
+pip install gh-pages-pypi
+# or run it without installing:
+uvx gh-pages-pypi --help
+```
+
+## Usage
+
+```bash
+gh-pages-pypi OWNER/REPO --out site [--token TOKEN]
+```
+
+Reads every (non-draft) release of `OWNER/REPO` via the GitHub API
+(`--token` defaults to `$GITHUB_TOKEN`), collects the wheel/sdist assets,
+computes each file's `sha256`, and writes a static
+[PEP 503](https://peps.python.org/pep-0503/) index to `site/`:
+
+```
+site/index.html                   → human landing page
+site/simple/                      → lists every project
+site/simple/<project>/            → file links with #sha256= fragments
+```
+
+It refuses to build an empty index (non-zero exit) so a misconfigured CI run
+can never deploy a blank package index.
+
+## Using it in your own repo
+
+1. In repo **Settings → Pages**, set **Source** to **GitHub Actions**.
+2. Publish your packages' wheels/sdists as GitHub Release assets (see
+   [`demo-release.yml`](.github/workflows/demo-release.yml) for a
+   tag-triggered example).
+3. Add a Pages workflow that runs the tool — the core of it:
+
+   ```yaml
+   - uses: astral-sh/setup-uv@v5
+   - name: Build the package index
+     env:
+       GITHUB_TOKEN: ${{ github.token }}
+     run: uvx gh-pages-pypi "$GITHUB_REPOSITORY" --out site
+   - uses: actions/upload-pages-artifact@v3
+     with:
+       path: site
+   ```
+
+   See [`pages.yml`](.github/workflows/pages.yml) for the full workflow
+   (triggers, permissions, deploy job). Note: releases created by workflows
+   with `GITHUB_TOKEN` don't fire `release` events, so a release workflow
+   must dispatch the Pages workflow explicitly (ours does).
+
+Your index appears at `https://<owner>.github.io/<repo>/simple/`.
+
+## The live demo
+
+Two tiny packages live in [`packages/`](packages/):
+[`demo-lib`](packages/demo-lib) (a one-function library) and
+[`demo-app`](packages/demo-app) (depends on it, installs a `demo-app` CLI).
+Install them from this repo's Pages index:
 
 ```sh
-pip install --extra-index-url https://bckohan.github.io/gh_pages_pypi/simple/ gh-pages-pypi-demo-app
+pip install --index-url https://bckohan.github.io/gh_pages_pypi/simple/ gh-pages-pypi-demo-app
 demo-app
 # Hello, world! (served from GitHub Pages)
 ```
 
-Installing `gh-pages-pypi-demo-app` also pulls its dependency
-`gh-pages-pypi-demo-lib` from the same index — proving dependency
-resolution works.
+Resolving `demo-app`'s dependency on `demo-lib` from the same index proves
+dependency resolution works end to end.
 
-## How it works
+Cut a new demo release (CalVer-bumps the package, tests, commits, tags,
+pushes — the workflows do the rest):
 
-pip doesn't need a server to install packages — just a static HTML index in
-the [PEP 503 "simple repository"](https://peps.python.org/pep-0503/) format:
-
+```sh
+just demo-release demo-lib
 ```
-/simple/                          → lists every project
-/simple/<project>/                → lists every file, linking to downloads
-```
-
-This repo wires that together with three pieces:
-
-1. **`packages/`** — two tiny example packages.
-   [`demo-lib`](packages/demo-lib) is a one-function library;
-   [`demo-app`](packages/demo-app) depends on it and installs a `demo-app`
-   CLI.
-2. **[`release.yml`](.github/workflows/release.yml)** — pushing a tag like
-   `demo-lib-v1.0.0` builds that package's wheel + sdist and attaches them
-   to a GitHub Release.
-3. **[`pages.yml`](.github/workflows/pages.yml)** — runs
-   [`scripts/build_index.py`](scripts/build_index.py), which asks the
-   GitHub API for every release asset, computes each file's `sha256`, and
-   writes the PEP 503 HTML linking straight to the release download URLs.
-   The result deploys to GitHub Pages. No generated file is ever committed.
-
-## Releasing a package
-
-1. Bump `version` in `packages/<pkg>/pyproject.toml`.
-2. Commit, then tag and push:
-
-   ```sh
-   git tag demo-lib-v1.0.1
-   git push origin demo-lib-v1.0.1
-   ```
-
-That's it. The release workflow builds and publishes the artifacts, then
-triggers the Pages workflow to rebuild the index.
-
-## Setting this up for your own repo
-
-1. Copy `scripts/build_index.py` and both workflows.
-2. In repo **Settings → Pages**, set **Source** to **GitHub Actions**.
-3. Put your packages somewhere `release.yml` can find them (this repo uses
-   `packages/<name>/`, tagged as `<name>-v<version>` — adjust the tag
-   pattern in `release.yml`'s `on.push.tags` to match your names).
-4. Push a tag. Your index appears at
-   `https://<owner>.github.io/<repo>/simple/`.
-
-Until the first release exists, the pages workflow fails on purpose —
-`build_index.py` refuses to deploy an empty index.
 
 ## Caveats
 
 - **Prefer `--extra-index-url` over `--index-url`** if you still want
-  pypi.org for everything else — but be aware pip may consult *both*
-  indexes, so a name squatted on pypi.org could shadow yours
+  pypi.org for everything else — but pip may consult *both* indexes, so a
+  name squatted on pypi.org could shadow yours
   ([dependency confusion](https://medium.com/@alex.birsan/dependency-confusion-4a5d60fec610)).
-  Give your packages names that don't exist on pypi.org (like the
-  deliberately obscure names here), or use `--index-url` to use *only*
-  your index.
-- Release assets on public repos are public; this scheme does not provide
-  a private index unless the repo (and thus asset downloads) are private —
-  in which case plain `pip` can't fetch them without auth anyway.
-- GitHub's API paginates releases at 100 per page; `build_index.py` reads
-  one page, which is plenty for a demo.
+  Use names that don't exist on pypi.org, or `--index-url` for your index
+  only.
+- Release assets on public repos are public; this is not a private index.
+- The GitHub API returns at most 100 releases per page and the tool reads
+  one page.
+- This repo's own index also lists `gh-pages-pypi` itself: the PyPI
+  release workflow attaches the tool's wheels to GitHub Releases, and the
+  index builder indexes every non-draft release — deliberate dogfooding.
 
 ## Development
 
-```sh
-python3 -m venv .venv
-.venv/bin/pip install pytest build pyyaml
-.venv/bin/pip install -e packages/demo-lib -e packages/demo-app
-.venv/bin/python -m pytest tests/ -v
+```bash
+just setup      # create the uv venv + pre-commit hooks
+just install    # sync all dependency groups
+just test       # run the test suite
+just check      # lint, format, types, package, docs
 ```
+
+Cut a PyPI release by pushing a signed `v*` tag (see
+[`release.yml`](.github/workflows/release.yml)).

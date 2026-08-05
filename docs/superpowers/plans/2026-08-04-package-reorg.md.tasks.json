@@ -1,0 +1,47 @@
+{
+  "planPath": "docs/superpowers/plans/2026-08-04-package-reorg.md",
+  "tasks": [
+    {
+      "id": 7,
+      "subject": "Task 1: Template scaffolding merge + packaging config",
+      "status": "completed",
+      "description": "**Goal:** Template files at repo root; pyproject declares package (typer/jinja2 deps, console script, editable demo packages via tool.uv.sources); uv sync works.\n\n**Verify:** uv run --no-sync pytest tests/test.py tests/test_packages.py -v (4 passed)\n\n```json:metadata\n{\"files\": [\"pyproject.toml\", \"justfile\", \".github/workflows/demo-release.yml\", \"uv.lock\"], \"verifyCommand\": \"uv run --no-sync pytest tests/test.py tests/test_packages.py -v\", \"acceptanceCriteria\": [\"uv sync succeeds with editable demo packages\", \"import gh_pages_pypi works\", \"no scorecard.yml\", \"demo-release.yml has old release content\"]}\n```"
+    },
+    {
+      "id": 8,
+      "subject": "Task 2: index.py + Jinja2 templates",
+      "status": "completed",
+      "blockedBy": [7],
+      "description": "**Goal:** Core logic in src/gh_pages_pypi/index.py rendering via packaged Jinja2 templates; old script/test deleted.\n\n**Verify:** uv run --no-sync pytest tests/test_index.py -v (4 passed)\n\n```json:metadata\n{\"files\": [\"src/gh_pages_pypi/index.py\", \"src/gh_pages_pypi/templates/project.html\", \"src/gh_pages_pypi/templates/simple_root.html\", \"src/gh_pages_pypi/templates/landing.html\", \"tests/test_index.py\"], \"verifyCommand\": \"uv run --no-sync pytest tests/test_index.py -v\", \"acceptanceCriteria\": [\"behavior preserved\", \"PackageLoader + autoescape\", \"old script removed\"]}\n```"
+    },
+    {
+      "id": 9,
+      "subject": "Task 3: Typer CLI",
+      "status": "completed",
+      "blockedBy": [8],
+      "description": "**Goal:** gh-pages-pypi OWNER/REPO --out DIR console script with old error semantics.\n\n**Verify:** uv run --no-sync pytest tests/test_cli.py -v (4 passed)\n\n```json:metadata\n{\"files\": [\"src/gh_pages_pypi/cli.py\", \"tests/test_cli.py\"], \"verifyCommand\": \"uv run --no-sync pytest tests/test_cli.py -v\", \"acceptanceCriteria\": [\"error semantics preserved\", \"--help works\"]}\n```"
+    },
+    {
+      "id": 10,
+      "subject": "Task 4: pages.yml dogfoods the tool",
+      "status": "completed",
+      "blockedBy": [9],
+      "description": "**Goal:** Pages workflow builds via setup-uv + uv run gh-pages-pypi.\n\n**Verify:** all workflow YAML parses\n\n```json:metadata\n{\"files\": [\".github/workflows/pages.yml\"], \"verifyCommand\": \"uvx --with pyyaml python -c \\\"import pathlib, yaml; [yaml.safe_load(p.read_text()) for p in pathlib.Path('.github/workflows').glob('*.yml')]; print('OK')\\\"\", \"acceptanceCriteria\": [\"uv-based build step\", \"rest unchanged\"]}\n```"
+    },
+    {
+      "id": 11,
+      "subject": "Task 5: README rewrite + full local verification",
+      "status": "completed",
+      "blockedBy": [10],
+      "description": "**Goal:** Tool-first README with template badges; ruff+mypy clean; 12 tests; smoke + uvx checks.\n\n**Verify:** uv run --no-sync pytest tests/ -v (12 passed)\n\n```json:metadata\n{\"files\": [\"README.md\"], \"verifyCommand\": \"uv run --no-sync pytest tests/ -v\", \"acceptanceCriteria\": [\"all sections present\", \"12 tests pass\", \"ruff/mypy clean\"]}\n```"
+    },
+    {
+      "id": 12,
+      "subject": "Task 6: Push + CI + live-demo verification",
+      "status": "pending",
+      "blockedBy": [11],
+      "description": "**Goal:** CI green; demo chain re-verified; live pip install works; report owner-only steps.\n\n**Verify:** demo-app prints greeting from live index\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"/tmp/ghp-livetest/bin/demo-app reorganized\", \"acceptanceCriteria\": [\"test+lint green\", \"demo chain works\", \"live install works\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-08-04T00:00:00Z"
+}
