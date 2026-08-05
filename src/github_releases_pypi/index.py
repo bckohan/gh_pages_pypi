@@ -9,12 +9,20 @@ Pages can serve. Links point at the release assets' download URLs and carry
 import hashlib
 import json
 import re
+import sys
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, TypedDict
 
-from jinja2 import Environment, PackageLoader, select_autoescape
+from jinja2 import (
+    ChoiceLoader,
+    Environment,
+    FileSystemLoader,
+    PackageLoader,
+    PrefixLoader,
+    select_autoescape,
+)
 
 API_ROOT = "https://api.github.com"
 
@@ -29,11 +37,24 @@ class FileEntry(TypedDict):
 
 Projects = dict[str, list[FileEntry]]
 
-_env = Environment(
-    loader=PackageLoader("github_releases_pypi"),
-    autoescape=select_autoescape(("html",)),
-    keep_trailing_newline=True,
-)
+
+def build_env(templates_dir: Path | None = None) -> Environment:
+    """Return the Jinja environment, checking ``templates_dir`` first.
+
+    Built-in templates stay reachable under a ``builtin/`` prefix so an
+    override can ``{% extends "builtin/landing.html" %}`` without recursing
+    into itself.
+    """
+    builtin = PackageLoader("github_releases_pypi")
+    loaders: list = []
+    if templates_dir is not None:
+        loaders.append(FileSystemLoader(templates_dir))
+    loaders += [PrefixLoader({"builtin": builtin}), builtin]
+    return Environment(
+        loader=ChoiceLoader(loaders),
+        autoescape=select_autoescape(("html",)),
+        keep_trailing_newline=True,
+    )
 
 
 def normalize(name: str) -> str:
@@ -86,9 +107,11 @@ def collect_projects(
     Returns ``{project: [{"filename", "url", "sha256"}, ...]}`` sorted by
     project name and filename. Assets that are not wheels or sdists are
     ignored, as are draft releases (their assets aren't publicly
-    downloadable).
+    downloadable). Duplicate filenames across releases are indexed once
+    (first occurrence wins) with a stderr warning.
     """
     projects: Projects = {}
+    seen: set[str] = set()
     for release in releases:
         if release.get("draft"):
             continue
@@ -96,6 +119,14 @@ def collect_projects(
             project = project_name_from_filename(asset["name"])
             if project is None:
                 continue
+            if asset["name"] in seen:
+                print(
+                    f"warning: duplicate asset {asset['name']} ignored "
+                    f"({asset['browser_download_url']})",
+                    file=sys.stderr,
+                )
+                continue
+            seen.add(asset["name"])
             projects.setdefault(normalize(project), []).append(
                 {
                     "filename": asset["name"],
@@ -114,11 +145,19 @@ def pages_url(repo: str) -> str:
     return f"https://{owner.lower()}.github.io/{name}/"
 
 
-def write_site(projects: Projects, out_dir: Path, repo: str) -> None:
+def write_site(
+    projects: Projects,
+    out_dir: Path,
+    *,
+    title: str,
+    index_url: str | None,
+    templates_dir: Path | None = None,
+) -> None:
     """Write the landing page and PEP 503 simple index under ``out_dir``."""
+    env = build_env(templates_dir)
     simple = out_dir / "simple"
     simple.mkdir(parents=True, exist_ok=True)
-    project_page = _env.get_template("project.html")
+    project_page = env.get_template("project.html")
     for project, files in projects.items():
         project_dir = simple / project
         project_dir.mkdir(parents=True, exist_ok=True)
@@ -126,12 +165,12 @@ def write_site(projects: Projects, out_dir: Path, repo: str) -> None:
             project_page.render(project=project, files=files), encoding="utf-8"
         )
     (simple / "index.html").write_text(
-        _env.get_template("simple_root.html").render(projects=projects),
+        env.get_template("simple_root.html").render(projects=projects),
         encoding="utf-8",
     )
     (out_dir / "index.html").write_text(
-        _env.get_template("landing.html").render(
-            repo=repo, index_url=pages_url(repo) + "simple/", projects=projects
+        env.get_template("landing.html").render(
+            title=title, index_url=index_url, projects=projects
         ),
         encoding="utf-8",
     )

@@ -71,6 +71,56 @@ can never deploy a blank package index.
 
 Your index appears at `https://<owner>.github.io/<repo>/simple/`.
 
+## Aggregating multiple repositories
+
+To serve one index built from several repositories' releases, pass a YAML
+config instead of a repository:
+
+```yaml
+# index.yml
+repositories:
+  - yourorg/lib-one
+  - yourorg/lib-two
+title: yourorg package index            # optional
+url: https://yourorg.github.io/pypi/    # optional — enables the absolute
+                                        # --extra-index-url example on the
+                                        # landing page
+```
+
+```sh
+github-releases-pypi --config index.yml --out site
+```
+
+Any wheel or sdist attached to any (non-draft) release on any configured
+repository is included. If two repositories publish the same filename, the
+first repository in the list wins and a warning is printed.
+
+## Customizing templates
+
+Add a `templates:` directory to the config (resolved relative to the config
+file) to override the built-in pages:
+
+```yaml
+templates: ./templates
+```
+
+A file named `landing.html`, `project.html`, or `simple_root.html` in that
+directory replaces the built-in template wholesale. To change just part of a
+page, extend the built-in under the `builtin/` prefix and override blocks:
+
+```html
+{% extends "builtin/landing.html" %}
+{% block footer %}<footer>© yourorg</footer>{% endblock %}
+```
+
+Always extend via the `builtin/` prefix — an override that does
+`{% extends "landing.html" %}` resolves to itself and fails with a recursion
+error.
+
+`landing.html` and `project.html` define blocks `title`, `head`, `header`,
+`content`, and `footer`. `simple_root.html` defines only `head` — its body is
+the PEP 503 anchor list that pip parses, so extend it with care.
+
 ## The live demo
 
 Two tiny packages live in [`packages/`](packages/):

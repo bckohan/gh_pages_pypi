@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta name="pypi:repository-version" content="1.0">
-    <title>Simple index</title>
+    <title>Simple index</title>{% block head %}{% endblock %}
   </head>
   <body>
 {% for project in projects %}    <a href="{{ project }}/">{{ project }}</a><br/>

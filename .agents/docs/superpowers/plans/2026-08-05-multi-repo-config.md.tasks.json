@@ -1,0 +1,40 @@
+{
+  "planPath": ".agents/docs/superpowers/plans/2026-08-05-multi-repo-config.md",
+  "tasks": [
+    {
+      "id": 0,
+      "subject": "Task 1: config.py with validation + pyyaml dependency",
+      "status": "completed",
+      "description": "**Goal:** config.load(path) parses/validates YAML into frozen Config; invalid shapes raise ConfigError.\n\n**Verify:** just test tests/test_config.py && just check-types\n\n```json:metadata\n{\"files\": [\"src/github_releases_pypi/config.py\", \"tests/test_config.py\", \"pyproject.toml\"], \"verifyCommand\": \"just test tests/test_config.py && just check-types\", \"acceptanceCriteria\": [\"valid+minimal configs load\", \"all invalid shapes raise ConfigError\", \"templates resolves against config dir\"]}\n```"
+    },
+    {
+      "id": 1,
+      "subject": "Task 2: build_env, template blocks, write_site signature",
+      "status": "completed",
+      "blockedBy": [0],
+      "description": "**Goal:** build_env(templates_dir) ChoiceLoader with builtin/ prefix; blocks in templates; write_site(*, title, index_url, templates_dir).\n\n**Verify:** just test\n\n```json:metadata\n{\"files\": [\"src/github_releases_pypi/index.py\", \"src/github_releases_pypi/templates/landing.html\", \"src/github_releases_pypi/templates/project.html\", \"src/github_releases_pypi/templates/simple_root.html\", \"tests/test_index.py\", \"src/github_releases_pypi/cli.py\"], \"verifyCommand\": \"just test\", \"acceptanceCriteria\": [\"wholesale override works\", \"builtin/ block extension works\", \"index_url=None omits pip example\", \"existing assertions pass\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 3: duplicate-filename dedupe in collect_projects",
+      "status": "completed",
+      "blockedBy": [1],
+      "description": "**Goal:** duplicate filenames indexed once (first wins), stderr warning, never hashed twice.\n\n**Verify:** just test tests/test_index.py\n\n```json:metadata\n{\"files\": [\"src/github_releases_pypi/index.py\", \"tests/test_index.py\"], \"verifyCommand\": \"just test tests/test_index.py\", \"acceptanceCriteria\": [\"dupe skipped before hashing\", \"warning on stderr\", \"first occurrence wins\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 4: CLI --config",
+      "status": "completed",
+      "blockedBy": [2],
+      "description": "**Goal:** --config XOR REPO; multi-repo fetch with per-repo failure naming; shortcut normalizes to Config.\n\n**Verify:** just test && just check-types\n\n```json:metadata\n{\"files\": [\"src/github_releases_pypi/cli.py\", \"tests/test_cli.py\"], \"verifyCommand\": \"just test && just check-types\", \"acceptanceCriteria\": [\"XOR enforcement\", \"multi-repo merge + config title\", \"ConfigError surfaced\", \"URLError names repo\", \"existing tests unchanged\"]}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 5: docs + changelog + full gate",
+      "status": "completed",
+      "blockedBy": [3],
+      "description": "**Goal:** README aggregation + template customization sections; changelog bullets; check-all green.\n\n**Verify:** just check-all\n\n```json:metadata\n{\"files\": [\"README.md\", \"doc/source/changelog.rst\"], \"verifyCommand\": \"just check-all\", \"acceptanceCriteria\": [\"README documents config + overrides\", \"check-all green\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-08-05"
+}

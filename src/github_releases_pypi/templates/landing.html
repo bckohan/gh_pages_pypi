@@ -2,18 +2,19 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>{{ repo }} package index</title>
+    <title>{% block title %}{{ title }}{% endblock %}</title>{% block head %}{% endblock %}
   </head>
   <body>
-    <h1>{{ repo }} package index</h1>
+    {% block header %}<h1>{{ title }}</h1>
     <p>A PyPI-compatible (PEP 503) package index served by GitHub Pages.
-       Packages are hosted as GitHub release assets.</p>
-    <p>Install packages with:</p>
+       Packages are hosted as GitHub release assets.</p>{% endblock %}
+    {% block content %}{% if index_url %}<p>Install packages with:</p>
     <pre>pip install --extra-index-url {{ index_url }} PACKAGE</pre>
-    <p>Available packages:</p>
+    {% endif %}<p>Available packages:</p>
     <ul>
 {% for project in projects %}      <li><code>{{ project }}</code></li>
 {% endfor %}    </ul>
-    <p><a href="simple/">Browse the simple index</a></p>
+    <p><a href="simple/">Browse the simple index</a></p>{% endblock %}
+    {% block footer %}{% endblock %}
   </body>
 </html>

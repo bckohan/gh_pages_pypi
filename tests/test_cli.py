@@ -71,3 +71,117 @@ def test_cli_token_from_env(tmp_path, monkeypatch):
     )
     assert result.exit_code == 0, all_output(result)
     assert (tmp_path / "simple" / "index.html").exists()
+
+
+def config_file(tmp_path, text):
+    cfg = tmp_path / "index.yml"
+    cfg.write_text(text)
+    return cfg
+
+
+def test_cli_requires_exactly_one_source(tmp_path):
+    result = runner.invoke(app, ["--out", str(tmp_path), "--token", "x"])
+    assert result.exit_code == 1
+    assert "provide exactly one of REPO or --config" in all_output(result)
+
+    cfg = config_file(tmp_path, "repositories: [a/b]\n")
+    result = runner.invoke(
+        app,
+        ["a/b", "--config", str(cfg), "--out", str(tmp_path), "--token", "x"],
+    )
+    assert result.exit_code == 1
+    assert "provide exactly one of REPO or --config" in all_output(result)
+
+
+def test_cli_config_merges_repositories(tmp_path, monkeypatch):
+    second_repo_releases = [
+        {
+            "tag_name": "v1.0.0",
+            "assets": [
+                {
+                    "name": "otherpkg-1.0.0-py3-none-any.whl",
+                    "browser_download_url": "https://github.com/someorg/other/releases/download/v1.0.0/otherpkg-1.0.0-py3-none-any.whl",
+                },
+            ],
+        },
+    ]
+    releases_by_repo = {
+        "bckohan/github-releases-pypi": FIXTURE_RELEASES,
+        "someorg/other-project": second_repo_releases,
+    }
+    monkeypatch.setattr(
+        index, "fetch_releases", lambda repo, token: releases_by_repo[repo]
+    )
+    monkeypatch.setattr(index, "hash_url", lambda url: "cafef00d")
+    cfg = config_file(
+        tmp_path,
+        """
+repositories:
+  - bckohan/github-releases-pypi
+  - someorg/other-project
+title: Aggregated Index
+""",
+    )
+    out = tmp_path / "site"
+    result = runner.invoke(
+        app, ["--config", str(cfg), "--out", str(out), "--token", "x"]
+    )
+    assert result.exit_code == 0, all_output(result)
+    assert "wrote index for 3 project(s)" in result.output
+    assert (out / "simple" / "otherpkg" / "index.html").exists()
+    assert (out / "simple" / "github-releases-pypi-demo-lib" / "index.html").exists()
+    landing = (out / "index.html").read_text()
+    assert "Aggregated Index" in landing
+    assert "--extra-index-url" not in landing  # no url in config
+
+
+def test_cli_config_error(tmp_path):
+    cfg = config_file(tmp_path, "repositories: []\n")
+    result = runner.invoke(
+        app, ["--config", str(cfg), "--out", str(tmp_path), "--token", "x"]
+    )
+    assert result.exit_code == 1
+    assert "'repositories' must be a non-empty list" in all_output(result)
+
+
+def test_cli_config_url_failure_names_repo(tmp_path, monkeypatch):
+    import urllib.error
+
+    def boom(repo, token):
+        if repo == "someorg/other-project":
+            raise urllib.error.URLError("nope")
+        return FIXTURE_RELEASES
+
+    monkeypatch.setattr(index, "fetch_releases", boom)
+    cfg = config_file(
+        tmp_path,
+        "repositories: [bckohan/github-releases-pypi, someorg/other-project]\n",
+    )
+    result = runner.invoke(
+        app, ["--config", str(cfg), "--out", str(tmp_path), "--token", "x"]
+    )
+    assert result.exit_code == 1
+    assert "GitHub API request for someorg/other-project failed" in all_output(result)
+
+
+def test_cli_rejects_malformed_repo(tmp_path):
+    result = runner.invoke(app, ["foo", "--out", str(tmp_path), "--token", "x"])
+    assert result.exit_code == 1
+    assert "is not OWNER/NAME" in all_output(result)
+
+
+def test_cli_reports_asset_download_failure(tmp_path, monkeypatch):
+    import urllib.error
+
+    monkeypatch.setattr(index, "fetch_releases", lambda repo, token: FIXTURE_RELEASES)
+
+    def boom(url):
+        raise urllib.error.URLError("asset gone")
+
+    monkeypatch.setattr(index, "hash_url", boom)
+    result = runner.invoke(
+        app,
+        ["bckohan/github-releases-pypi", "--out", str(tmp_path), "--token", "x"],
+    )
+    assert result.exit_code == 1
+    assert "downloading a release asset failed" in all_output(result)
