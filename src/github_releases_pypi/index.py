@@ -30,7 +30,7 @@ class FileEntry(TypedDict):
 Projects = dict[str, list[FileEntry]]
 
 _env = Environment(
-    loader=PackageLoader("gh_pages_pypi"),
+    loader=PackageLoader("github_releases_pypi"),
     autoescape=select_autoescape(("html",)),
     keep_trailing_newline=True,
 )

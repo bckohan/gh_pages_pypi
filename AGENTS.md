@@ -14,9 +14,9 @@ new plans and specs there rather than in `docs/` or `doc/`.
 
 ## What This Repo Is
 
-**gh-pages-pypi** — Serve a PyPI-compatible package index from GitHub Pages, built from GitHub release assets.
+**github-releases-pypi** — Serve a PyPI-compatible package index from GitHub Pages, built from GitHub release assets.
 
-A Python library. Source lives in `src/gh_pages_pypi/`. Tests are in `tests/`. Documentation is in `doc/`.
+A Python library. Source lives in `src/github_releases_pypi/`. Tests are in `tests/`. Documentation is in `doc/`.
 
 ## Tooling
 
@@ -73,7 +73,7 @@ newest Python on Windows and macOS. Lower dependency bounds are tested with
 ## Project Structure
 
 ```
-src/gh_pages_pypi/   # library source
+src/github_releases_pypi/   # library source
 tests/                               # pytest test suite
 doc/source/                          # Sphinx documentation source
 ```

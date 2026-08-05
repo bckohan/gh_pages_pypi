@@ -6,7 +6,7 @@
 Reference
 =========
 
-.. automodule:: gh_pages_pypi
+.. automodule:: github_releases_pypi
 
 |
 

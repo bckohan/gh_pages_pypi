@@ -10,7 +10,7 @@ r"""
 Serve a PyPI-compatible package index from GitHub Pages, built from GitHub release assets.
 """
 
-__title__ = "gh-pages-pypi"
+__title__ = "github-releases-pypi"
 __version__ = "0.1.0"
 __author__ = "Brian Kohan"
 __license__ = "MIT"

@@ -3,12 +3,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-import gh_pages_pypi
+import github_releases_pypi
 
-project = gh_pages_pypi.__title__
-copyright = gh_pages_pypi.__copyright__
-author = gh_pages_pypi.__author__
-release = gh_pages_pypi.__version__
+project = github_releases_pypi.__title__
+copyright = github_releases_pypi.__copyright__
+author = github_releases_pypi.__author__
+release = github_releases_pypi.__version__
 
 extensions = [
     "sphinx.ext.intersphinx",
@@ -23,7 +23,7 @@ exclude_patterns = []
 
 html_theme = "furo"
 html_theme_options = {
-    "source_repository": "https://github.com/bckohan/gh_pages_pypi/",
+    "source_repository": "https://github.com/bckohan/github-releases-pypi/",
     "source_branch": "main",
     "source_directory": "doc/source",
 }

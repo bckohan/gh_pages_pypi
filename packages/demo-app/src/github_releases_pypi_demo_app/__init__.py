@@ -2,7 +2,7 @@
 
 import sys
 
-from gh_pages_pypi_demo_lib import greeting
+from github_releases_pypi_demo_lib import greeting
 
 __version__ = "1.0.0"
 

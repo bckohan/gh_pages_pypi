@@ -10,7 +10,7 @@ We are actively seeking additional maintainers. If you're interested, please ope
 
 We provide a platform independent justfile with recipes for all the development tasks. You should [install just](https://just.systems/man/en/installation.html) if it is not on your system already.
 
-``gh-pages-pypi`` uses [uv](https://docs.astral.sh/uv) for environment, package, and dependency management. ``just setup`` will install the necessary build tooling if you do not already have it:
+``github-releases-pypi`` uses [uv](https://docs.astral.sh/uv) for environment, package, and dependency management. ``just setup`` will install the necessary build tooling if you do not already have it:
 
 ```sh
 just setup <python version>
@@ -32,7 +32,7 @@ just install
 
 ## Documentation
 
-`gh-pages-pypi` documentation is generated using [Sphinx](https://www.sphinx-doc.org) with the [furo](https://github.com/pradyunsg/furo) theme. Any new feature PRs must provide updated documentation for the features added. To build the docs run doc8 to check for formatting issues then run Sphinx:
+`github-releases-pypi` documentation is generated using [Sphinx](https://www.sphinx-doc.org) with the [furo](https://github.com/pradyunsg/furo) theme. Any new feature PRs must provide updated documentation for the features added. To build the docs run doc8 to check for formatting issues then run Sphinx:
 
 ```sh
 just docs  # builds docs
@@ -48,7 +48,7 @@ just docs-live
 
 ## Static Analysis
 
-`gh-pages-pypi` uses [ruff](https://docs.astral.sh/ruff/) for Python linting, header import standardization and code formatting. [mypy](http://mypy-lang.org/) and [pyright](https://github.com/microsoft/pyright) are used for static type checking. Before any PR is accepted the following must be run, and static analysis tools should not produce any errors or warnings. Disabling certain errors or warnings where justified is acceptable:
+`github-releases-pypi` uses [ruff](https://docs.astral.sh/ruff/) for Python linting, header import standardization and code formatting. [mypy](http://mypy-lang.org/) and [pyright](https://github.com/microsoft/pyright) are used for static type checking. Before any PR is accepted the following must be run, and static analysis tools should not produce any errors or warnings. Disabling certain errors or warnings where justified is acceptable:
 
 To fix formatting and linting problems that are fixable run:
 
@@ -64,7 +64,7 @@ just check
 
 ## Running Tests
 
-`gh-pages-pypi` is set up to use [pytest](https://docs.pytest.org) to run unit tests. All the tests are housed in `tests`. Before a PR is accepted, all tests must be passing and the code coverage must be at 100%. A small number of exempted error handling branches are acceptable.
+`github-releases-pypi` is set up to use [pytest](https://docs.pytest.org) to run unit tests. All the tests are housed in `tests`. Before a PR is accepted, all tests must be passing and the code coverage must be at 100%. A small number of exempted error handling branches are acceptable.
 
 To run the full suite:
 
@@ -90,7 +90,7 @@ This will set a breakpoint at the start of the test.
 
 ## Versioning
 
-`gh-pages-pypi` strictly adheres to [semantic versioning](https://semver.org).
+`github-releases-pypi` strictly adheres to [semantic versioning](https://semver.org).
 
 ## Issuing Releases
 

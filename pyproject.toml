@@ -1,5 +1,5 @@
 [project]
-name = "gh-pages-pypi"
+name = "github-releases-pypi"
 version = "0.1.0"
 description = "Serve a PyPI-compatible package index from GitHub Pages, built from GitHub release assets."
 requires-python = ">=3.10,<4.0"
@@ -10,8 +10,8 @@ license = "MIT"
 license-files = [ "LICENSE" ]
 
 readme = "README.md"
-repository = "https://github.com/bckohan/gh_pages_pypi"
-homepage = "https://gh-pages-pypi.readthedocs.io"
+repository = "https://github.com/bckohan/github-releases-pypi"
+homepage = "https://github-releases-pypi.readthedocs.io"
 keywords = []
 dependencies = [
     "typer>=0.15",
@@ -36,7 +36,7 @@ classifiers = [
 ]
 
 [project.scripts]
-gh-pages-pypi = "gh_pages_pypi.cli:app"
+github-releases-pypi = "github_releases_pypi.cli:app"
 
 [build-system]
 requires = ["hatchling"]
@@ -46,18 +46,18 @@ build-backend = "hatchling.build"
 package = true
 
 [tool.uv.sources]
-gh-pages-pypi-demo-lib = { path = "packages/demo-lib", editable = true }
-gh-pages-pypi-demo-app = { path = "packages/demo-app", editable = true }
+github-releases-pypi-demo-lib = { path = "packages/demo-lib", editable = true }
+github-releases-pypi-demo-app = { path = "packages/demo-app", editable = true }
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/gh_pages_pypi"]
+packages = ["src/github_releases_pypi"]
 
 [project.urls]
-"Homepage"      = "https://gh-pages-pypi.readthedocs.io"
-"Documentation" = "https://gh-pages-pypi.readthedocs.io"
-"Repository"    = "https://github.com/bckohan/gh_pages_pypi"
-"Issues"        = "https://github.com/bckohan/gh_pages_pypi/issues"
-"Changelog"     = "https://gh-pages-pypi.readthedocs.io/en/latest/changelog.html"
+"Homepage"      = "https://github-releases-pypi.readthedocs.io"
+"Documentation" = "https://github-releases-pypi.readthedocs.io"
+"Repository"    = "https://github.com/bckohan/github-releases-pypi"
+"Issues"        = "https://github.com/bckohan/github-releases-pypi/issues"
+"Changelog"     = "https://github-releases-pypi.readthedocs.io/en/latest/changelog.html"
 
 [dependency-groups]
 docs = [
@@ -84,8 +84,8 @@ test = [
     "pytest>=8.3.4",
     "pytest-cov>=6.0.0",
     "packaging>=24.2",
-    "gh-pages-pypi-demo-lib",
-    "gh-pages-pypi-demo-app",
+    "github-releases-pypi-demo-lib",
+    "github-releases-pypi-demo-app",
 ]
 dev = [
     { include-group = "typing" },
@@ -103,12 +103,12 @@ dev = [
 check_untyped_defs = true
 ignore_missing_imports = true
 mypy_path = ["src"]
-packages = ["gh_pages_pypi"]
+packages = ["github_releases_pypi"]
 
 [tool.pyright]
 pythonVersion = "3.10"
 typeCheckingMode = "basic"
-include = ["src/gh_pages_pypi"]
+include = ["src/github_releases_pypi"]
 reportMissingImports = true
 reportMissingTypeStubs = false
 reportUnusedImport = true
@@ -123,21 +123,21 @@ python_files = "test*.py"
 norecursedirs = "*.egg .eggs dist build docs .tox .git __pycache__"
 addopts = [
     "--strict-markers",
-    "--cov=gh_pages_pypi",
+    "--cov=github_releases_pypi",
     "--cov-branch",
     "--cov-report=term-missing:skip-covered",
 ]
 
 [tool.coverage.run]
 branch = true
-source = ["gh_pages_pypi"]
+source = ["github_releases_pypi"]
 concurrency = ["thread", "multiprocessing"]
 parallel = true
 relative_files = true
-command_line = "-m pytest --cov=gh_pages_pypi"
+command_line = "-m pytest --cov=github_releases_pypi"
 
 [tool.coverage.paths]
-source = ["gh_pages_pypi"]
+source = ["github_releases_pypi"]
 
 [tool.ruff]
 line-length = 88

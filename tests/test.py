@@ -1,4 +1,4 @@
-import gh_pages_pypi
+import github_releases_pypi
 
 
 # -- Unittest style tests -----------------------------------------------------
@@ -17,4 +17,4 @@ import gh_pages_pypi
 
 def test_example():
     """Example pytest functional test."""
-    assert gh_pages_pypi.__title__ == "gh-pages-pypi"
+    assert github_releases_pypi.__title__ == "github-releases-pypi"

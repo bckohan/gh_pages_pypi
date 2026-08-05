@@ -1,9 +1,9 @@
 .. include:: ./refs.rst
 .. role:: big
 
-=============
-gh-pages-pypi
-=============
+====================
+github-releases-pypi
+====================
 
 
 .. only:: html
@@ -17,36 +17,36 @@ gh-pages-pypi
         :target: https://docs.astral.sh/ruff
         :alt: Ruff
 
-    .. image:: https://badge.fury.io/py/gh-pages-pypi.svg
-        :target: https://pypi.python.org/pypi/gh-pages-pypi/
+    .. image:: https://badge.fury.io/py/github-releases-pypi.svg
+        :target: https://pypi.python.org/pypi/github-releases-pypi/
         :alt: PyPI Version
 
-    .. image:: https://img.shields.io/pypi/pyversions/gh-pages-pypi.svg
-        :target: https://pypi.python.org/pypi/gh-pages-pypi/
+    .. image:: https://img.shields.io/pypi/pyversions/github-releases-pypi.svg
+        :target: https://pypi.python.org/pypi/github-releases-pypi/
         :alt: Python Versions
 
-    .. image:: https://img.shields.io/pypi/status/gh-pages-pypi.svg
-        :target: https://pypi.python.org/pypi/gh-pages-pypi
+    .. image:: https://img.shields.io/pypi/status/github-releases-pypi.svg
+        :target: https://pypi.python.org/pypi/github-releases-pypi
         :alt: Development Status
 
-    .. image:: https://img.shields.io/pypi/types/gh-pages-pypi.svg
-        :target: https://pypi.python.org/pypi/gh-pages-pypi
+    .. image:: https://img.shields.io/pypi/types/github-releases-pypi.svg
+        :target: https://pypi.python.org/pypi/github-releases-pypi
         :alt: Typed
 
-    .. image:: https://readthedocs.org/projects/gh-pages-pypi/badge/?version=latest
-        :target: http://gh-pages-pypi.readthedocs.io/?badge=latest/
+    .. image:: https://readthedocs.org/projects/github-releases-pypi/badge/?version=latest
+        :target: http://github-releases-pypi.readthedocs.io/?badge=latest/
         :alt: Documentation Status
 
-    .. image:: https://codecov.io/gh/bckohan/gh_pages_pypi/branch/main/graph/badge.svg
-        :target: https://codecov.io/gh/bckohan/gh_pages_pypi
+    .. image:: https://codecov.io/gh/bckohan/github-releases-pypi/branch/main/graph/badge.svg
+        :target: https://codecov.io/gh/bckohan/github-releases-pypi
         :alt: Code Coverage
 
-    .. image:: https://github.com/bckohan/gh_pages_pypi/actions/workflows/test.yml/badge.svg?branch=main
-        :target: https://github.com/bckohan/gh_pages_pypi/actions/workflows/test.yml
+    .. image:: https://github.com/bckohan/github-releases-pypi/actions/workflows/test.yml/badge.svg?branch=main
+        :target: https://github.com/bckohan/github-releases-pypi/actions/workflows/test.yml
         :alt: Test Status
 
-    .. image:: https://github.com/bckohan/gh_pages_pypi/actions/workflows/lint.yml/badge.svg
-        :target: https://github.com/bckohan/gh_pages_pypi/actions/workflows/lint.yml
+    .. image:: https://github.com/bckohan/github-releases-pypi/actions/workflows/lint.yml/badge.svg
+        :target: https://github.com/bckohan/github-releases-pypi/actions/workflows/lint.yml
         :alt: Lint Status
 
 

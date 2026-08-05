@@ -241,20 +241,20 @@ run +ARGS:
 validate_version VERSION:
     import re
     import tomllib
-    import gh_pages_pypi
+    import github_releases_pypi
     from packaging.version import Version
     raw_version = "{{ VERSION }}".lstrip("v")
     version_obj = Version(raw_version)
     assert str(version_obj) == raw_version
     assert raw_version == tomllib.load(open('pyproject.toml', 'rb'))['project']['version']
-    assert raw_version == gh_pages_pypi.__version__
+    assert raw_version == github_releases_pypi.__version__
     print(raw_version)
 
 # issue a release for the given semver string (e.g. 1.0.0)
 release VERSION: install check-all
     @just validate_version v{{ VERSION }}
     git tag -s v{{ VERSION }} -m "{{ VERSION }} Release"
-    git push https://github.com/bckohan/gh_pages_pypi.git v{{ VERSION }}
+    git push https://github.com/bckohan/github-releases-pypi.git v{{ VERSION }}
 
 # CalVer-release a demo package: bump, test, commit, tag, push — triggers demo-release.yml → pages.yml
 demo-release package:
