@@ -63,7 +63,7 @@ packages = ["src/gh_pages_pypi"]
 docs = [
     "doc8>=1.1.2",
     "furo>=2024.8.6",
-    "readme-renderer[md]>=44.0",
+    "readme-renderer[md]>=45.0",
     "sphinx>=8.0.0",
     "sphinx-autobuild>=2024.10.3",
     "sphinx-tabs>=3.4.7",
@@ -74,11 +74,11 @@ typing = [
 ]
 lint = [
     "ruff>=0.15.0",
-    "readme-renderer[md]>=43.0",
+    "readme-renderer[md]>=45.0",
     "doc8>=1.1.2",
-    "bandit[toml,sarif]>=1.7.10"
+    "bandit[toml,sarif]>=1.9.4"
 ]
-coverage  = ["coverage[toml]>=7.6.1"]
+coverage  = ["coverage[toml]>=7.15.2"]
 test = [
     { include-group = "coverage" },
     "pytest>=8.3.4",
