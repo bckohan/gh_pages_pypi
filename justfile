@@ -236,68 +236,93 @@ coverage:
 run +ARGS:
     uv run {{ ARGS }}
 
-# validate the given version string against the lib version
+# validate the given version tag against every package version site
 [script]
 validate_version VERSION:
     import re
     import tomllib
-    import github_releases_pypi
+    from pathlib import Path
     from packaging.version import Version
+    import github_releases_pypi
     raw_version = "{{ VERSION }}".lstrip("v")
     version_obj = Version(raw_version)
-    assert str(version_obj) == raw_version
-    assert raw_version == tomllib.load(open('pyproject.toml', 'rb'))['project']['version']
-    assert raw_version == github_releases_pypi.__version__
+    assert str(version_obj) == raw_version, f"unnormalized version: {raw_version}"
+    for pyproject in (
+        "pyproject.toml",
+        "packages/demo-lib/pyproject.toml",
+        "packages/demo-app/pyproject.toml",
+    ):
+        actual = tomllib.load(open(pyproject, "rb"))["project"]["version"]
+        assert actual == raw_version, f"{pyproject} has {actual}, expected {raw_version}"
+    assert github_releases_pypi.__version__ == raw_version, (
+        f"github_releases_pypi.__version__ is {github_releases_pypi.__version__}, "
+        f"expected {raw_version}"
+    )
+    for init in (
+        "packages/demo-lib/src/github_releases_pypi_demo_lib/__init__.py",
+        "packages/demo-app/src/github_releases_pypi_demo_app/__init__.py",
+    ):
+        match = re.search(r'(?m)^__version__ = "(.*)"$', Path(init).read_text())
+        assert match, f"no __version__ line in {init}"
+        assert match.group(1) == raw_version, (
+            f"{init} has {match.group(1)}, expected {raw_version}"
+        )
     print(raw_version)
 
-# issue a release for the given semver string (e.g. 1.0.0)
-release VERSION: install check-all
-    @just validate_version v{{ VERSION }}
-    git tag -s v{{ VERSION }} -m "{{ VERSION }} Release"
-    git push https://github.com/bckohan/github-releases-pypi.git v{{ VERSION }}
-
-# CalVer-release a demo package: bump, test, commit, tag, push — triggers demo-release.yml → pages.yml
-demo-release package:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cd "{{ justfile_directory() }}"
-
-    version=$(uv run python - "{{ package }}" <<'PYEOF'
+# stamp today's CalVer (serial-suffixed if already tagged) into every version site
+[script]
+_stamp-version:
     import re
     import subprocess
     import sys
     from datetime import date
     from pathlib import Path
 
-    package = sys.argv[1]
-    pyproject = Path("packages") / package / "pyproject.toml"
-    if not pyproject.exists():
-        sys.exit(f"error: no such package: {pyproject.parent}")
+    VERSION_FILES = [
+        (Path("pyproject.toml"), r'(?m)^version = ".*"$', 'version = "{}"'),
+        (Path("packages/demo-lib/pyproject.toml"), r'(?m)^version = ".*"$', 'version = "{}"'),
+        (Path("packages/demo-app/pyproject.toml"), r'(?m)^version = ".*"$', 'version = "{}"'),
+        (Path("src/github_releases_pypi/__init__.py"), r'(?m)^__version__ = ".*"$', '__version__ = "{}"'),
+        (Path("packages/demo-lib/src/github_releases_pypi_demo_lib/__init__.py"), r'(?m)^__version__ = ".*"$', '__version__ = "{}"'),
+        (Path("packages/demo-app/src/github_releases_pypi_demo_app/__init__.py"), r'(?m)^__version__ = ".*"$', '__version__ = "{}"'),
+    ]
 
     today = date.today()
     base = f"{today.year}.{today.month}.{today.day}"
     tags = subprocess.run(
-        ["git", "tag", "--list", f"{package}-v{base}*"],
+        ["git", "tag", "--list", f"v{base}*"],
         capture_output=True, text=True, check=True,
     ).stdout.split()
     version, serial = base, 0
-    while f"{package}-v{version}" in tags:
+    while f"v{version}" in tags:
         serial += 1
         version = f"{base}.{serial}"
 
-    text, count = re.subn(
-        r'(?m)^version = ".*"$', f'version = "{version}"', pyproject.read_text(), count=1
-    )
-    if count != 1:
-        sys.exit(f"error: no version line found in {pyproject}")
-    pyproject.write_text(text)
-    print(version)
-    PYEOF
-    )
+    contents = []
+    for path, pattern, _ in VERSION_FILES:
+        text = path.read_text()
+        if not re.search(pattern, text):
+            sys.exit(f"error: no version line found in {path}")
+        contents.append(text)
 
+    for (path, pattern, template), text in zip(VERSION_FILES, contents):
+        path.write_text(re.sub(pattern, template.format(version), text, count=1))
+
+    print(version)
+
+# CalVer-release the repo: stamp all packages, test, commit, sign tag, push — triggers release.yml
+release: install check-all
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{ justfile_directory() }}"
+    [ "$(git branch --show-current)" = "main" ] || { echo "error: release must run from main" >&2; exit 1; }
+    [ -z "$(git status --porcelain)" ] || { echo "error: working tree not clean" >&2; exit 1; }
+    git fetch --tags origin
+    version=$(just _stamp-version)
+    uv lock
     uv run --no-sync pytest tests/ -q
-    git add "packages/{{ package }}/pyproject.toml"
-    git commit -m "Release {{ package }} ${version}"
-    git tag "{{ package }}-v${version}"
-    git push origin main "{{ package }}-v${version}"
-    echo "Released {{ package }} ${version} — watch it at: gh run watch"
+    git add -u
+    git commit -m "Release ${version}"
+    git tag -s "v${version}" -m "${version} Release"
+    git push --atomic origin main "v${version}"
+    echo "Released ${version} — watch it at: gh run watch"

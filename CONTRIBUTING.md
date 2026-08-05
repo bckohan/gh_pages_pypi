@@ -90,14 +90,16 @@ This will set a breakpoint at the start of the test.
 
 ## Versioning
 
-`github-releases-pypi` strictly adheres to [semantic versioning](https://semver.org).
+`github-releases-pypi` uses [CalVer](https://calver.org): `YYYY.M.D`, with a
+`.N` serial suffix for repeat releases on the same day. The tool and the demo
+packages always share the release version.
 
 ## Issuing Releases
 
-The release workflow is triggered by tag creation. You must have [git tag signing enabled](https://docs.github.com/en/authentication/managing-commit-signature-verification/signing-commits). Our justfile has a release shortcut:
+The release workflow is triggered by tag creation. You must have [git tag signing enabled](https://docs.github.com/en/authentication/managing-commit-signature-verification/signing-commits). Our justfile has a release shortcut — it must be run from a clean `main` checkout, and it runs the full check suite, stamps every package, commits, signs the tag, and pushes:
 
 ```sh
-just release x.x.x
+just release
 ```
 
 ## Just Recipes
@@ -144,12 +146,12 @@ install-uv                   # install the uv package manager
 lint *ENV                    # sort imports and fix linting issues
 open-docs                    # open the html documentation
 prek                         # run the pre-commit checks
-release VERSION              # issue a release for the given semver string (e.g. 1.0.0)
+release                      # CalVer-release the repo: stamp all packages, test, commit, sign tag, push — triggers release.yml
 run +ARGS                    # run the command in the virtual environment
 setup python="python"        # setup the venv and pre-commit hooks
 sort-imports *ENV            # sort the python imports
 test *TESTS                  # run specific tests (project venv)
-test-all *ENV                # run all tests in an isolated environment
-validate_version VERSION     # validate the given version string against the lib version
+test-all *ENV                # run all tests in an isolated environment (pass any uv run flags, e.g. -p 3.13)
+validate_version VERSION     # validate the given version tag against every package version site
 zizmor                       # run zizmor security analysis of CI
 ```

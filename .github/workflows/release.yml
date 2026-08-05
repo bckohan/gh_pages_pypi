@@ -11,7 +11,7 @@ concurrency:
 on:
   push:
     tags:
-      - "v[0-9]*.[0-9]*.[0-9]*" # only publish on version tags (e.g. v1.0.0)
+      - "v[0-9]*.[0-9]*.[0-9]*" # CalVer tags, e.g. v2026.8.5 or v2026.8.5.1
 
 jobs:
   lint:
@@ -32,7 +32,6 @@ jobs:
       contents: read
     outputs:
       PACKAGE_NAME: ${{ steps.set-package.outputs.package_name }}
-      RELEASE_VERSION: ${{ steps.set-package.outputs.release_version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -73,6 +72,15 @@ jobs:
         with:
           name: python-package-distributions
           path: dist/
+      - name: Build the demo packages
+        run: |
+          uv build --project packages/demo-lib --out-dir demo-dist
+          uv build --project packages/demo-app --out-dir demo-dist
+      - name: Store the demo distributions
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: demo-package-distributions
+          path: demo-dist/
       - name: Set Package Name
         id: set-package
         run: |
@@ -133,12 +141,19 @@ jobs:
     permissions:
       contents: write # IMPORTANT: mandatory for making GitHub Releases
       id-token: write # IMPORTANT: mandatory for sigstore
+      actions: write # dispatch the pages workflow after the release exists
 
     steps:
       - name: Download all the dists
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: python-package-distributions
+          path: dist/
+      # both artifacts merge into dist/ — safe only while package filenames stay distinct
+      - name: Download the demo distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: demo-package-distributions
           path: dist/
       - name: Sign the dists with Sigstore
         uses: sigstore/gh-action-sigstore-python@5b79a39c381910c090341a2c9b0bf022c8b387e1
@@ -152,6 +167,7 @@ jobs:
           GITHUB_REF_NAME: ${{ github.ref_name }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: >-
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" ||
           gh release create
           "$GITHUB_REF_NAME"
           --repo "$GITHUB_REPOSITORY"
@@ -168,3 +184,12 @@ jobs:
           gh release upload
           "$GITHUB_REF_NAME" dist/**
           --repo "$GITHUB_REPOSITORY"
+          --clobber
+      # Releases created with GITHUB_TOKEN do not fire `release` events in
+      # other workflows (GitHub suppresses them to prevent recursion), so
+      # trigger the Pages rebuild explicitly.
+      - name: Rebuild the Pages index
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh workflow run pages.yml

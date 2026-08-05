@@ -1,7 +1,7 @@
 # Regenerates the PEP 503 package index from GitHub release assets and
 # deploys it to GitHub Pages. Runs on releases (created or deleted by hand),
 # on any push to main (e.g. to pick up index script changes), on manual
-# dispatch, and is triggered explicitly by demo-release.yml (releases created
+# dispatch, and is triggered explicitly by release.yml (releases created
 # with GITHUB_TOKEN do not fire `release` events).
 #
 # NOTE: this fails by design while the repository has no releases yet —

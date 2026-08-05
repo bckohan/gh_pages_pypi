@@ -1,0 +1,40 @@
+{
+  "planPath": ".agents/docs/superpowers/plans/2026-08-05-unified-calver-release.md",
+  "tasks": [
+    {
+      "id": 0,
+      "subject": "Task 0: Commit the pending package-rename work",
+      "status": "completed",
+      "description": "**Goal:** Start from a clean tree so each subsequent task commits only its own changes.\n\n**Verify:** git status --short | wc -l → 0; just test → 13 passed\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"git status --short | wc -l && just test\", \"acceptanceCriteria\": [\"clean tree\", \"13 tests pass\"]}\n```"
+    },
+    {
+      "id": 1,
+      "subject": "Task 1: Unified release recipe in the justfile",
+      "status": "completed",
+      "blockedBy": [0],
+      "description": "**Goal:** just release (no arg) computes CalVer, stamps six version sites, tests, commits, signs tag, pushes; validate_version checks all six; demo-release deleted.\n\n**Verify:** just _stamp-version stamps exactly 6 files; validate_version passes/fails correctly; revert after dry-run.\n\n```json:metadata\n{\"files\": [\"justfile\"], \"verifyCommand\": \"just --summary | grep release && grep -c demo-release justfile\", \"acceptanceCriteria\": [\"6-file stamp\", \"validate_version six sites\", \"demo-release deleted\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 2: One release workflow",
+      "status": "completed",
+      "blockedBy": [1],
+      "description": "**Goal:** release.yml builds all three packages, two-artifact split, one GitHub Release, pages dispatch; demo-release.yml deleted; pages.yml comment updated.\n\n**Verify:** yaml parses; demo-release.yml gone; zizmor no new findings.\n\n```json:metadata\n{\"files\": [\".github/workflows/release.yml\", \".github/workflows/pages.yml\", \".github/workflows/demo-release.yml\"], \"verifyCommand\": \"uv run python -c \\\"import yaml; yaml.safe_load(open('.github/workflows/release.yml'))\\\"\", \"acceptanceCriteria\": [\"two artifacts\", \"pypi jobs untouched\", \"pages dispatch\", \"demo-release.yml deleted\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 3: Delete old per-package releases and tags",
+      "status": "pending",
+      "blockedBy": [2],
+      "description": "**Goal:** Remove demo-lib-v2026.8.4 and demo-app-v2026.8.4 releases and tags, remote and local. No commit.\n\n**Verify:** gh release list empty; no demo-* tags local or remote.\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"gh release list | wc -l && git tag -l 'demo-*' | wc -l\", \"acceptanceCriteria\": [\"no releases\", \"no demo tags anywhere\"]}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 4: Documentation sweep + full gate",
+      "status": "completed",
+      "blockedBy": [3],
+      "description": "**Goal:** AGENTS.md, README.md, CONTRIBUTING.md describe the unified CalVer flow; just check-all passes.\n\n**Verify:** grep for demo-release/semantic versioning in docs → 0 hits; just check-all → exit 0.\n\n```json:metadata\n{\"files\": [\"AGENTS.md\", \"README.md\", \"CONTRIBUTING.md\"], \"verifyCommand\": \"just check-all\", \"acceptanceCriteria\": [\"no stale flow docs\", \"check-all green\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-08-05"
+}

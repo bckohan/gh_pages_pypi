@@ -48,9 +48,9 @@ can never deploy a blank package index.
 ## Using it in your own repo
 
 1. In repo **Settings → Pages**, set **Source** to **GitHub Actions**.
-2. Publish your packages' wheels/sdists as GitHub Release assets (see
-   [`demo-release.yml`](.github/workflows/demo-release.yml) for a
-   tag-triggered example).
+2. Publish your packages' wheels/sdists as GitHub Release assets (see the
+   `github-release` job in [`release.yml`](.github/workflows/release.yml)
+   for a tag-triggered example).
 3. Add a Pages workflow that runs the tool — the core of it:
 
    ```yaml
@@ -87,11 +87,12 @@ demo-app
 Resolving `demo-app`'s dependency on `demo-lib` from the same index proves
 dependency resolution works end to end.
 
-Cut a new demo release (CalVer-bumps the package, tests, commits, tags,
-pushes — the workflows do the rest):
+Cut a new release (CalVer-stamps every package — the tool and both demos —
+runs the full check suite, tests, commits, tags, pushes; the workflows do the
+rest):
 
 ```sh
-just demo-release demo-lib
+just release
 ```
 
 ## Caveats
@@ -118,5 +119,5 @@ just test       # run the test suite
 just check      # lint, format, types, package, docs
 ```
 
-Cut a PyPI release by pushing a signed `v*` tag (see
-[`release.yml`](.github/workflows/release.yml)).
+Cut a release with `just release` — it pushes a signed `v*` tag that triggers
+[`release.yml`](.github/workflows/release.yml).

@@ -2,6 +2,10 @@
 
 This file is for Claude Code and other Claude-based AI assistants working in this repository.
 
+## Agent Rules
+
+Regardless of skill instructions never commit or push anything. Always let the driver do this.
+
 ## Agentic Docs
 
 Agentic working documents live in `.agents/docs/`:
@@ -61,8 +65,11 @@ just check-docs   # lint docs with doc8
 
 ### Release
 ```bash
-just release 1.2.3   # validates version, tags, and pushes tag to GitHub
+just release      # CalVer-stamp all packages, commit, sign tag vYYYY.M.D[.N], push to main
 ```
+One tag ships everything: github-releases-pypi to TestPyPI/PyPI plus a single
+GitHub Release containing all three packages' dists, which the Pages index
+serves.
 
 ## Test Strategy
 
