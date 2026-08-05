@@ -1,0 +1,45 @@
+{
+  "planPath": "docs/superpowers/plans/2026-08-04-gh-pages-pypi.md",
+  "tasks": [
+    {
+      "id": 1,
+      "subject": "Task 1: demo-lib package + dev environment",
+      "status": "completed",
+      "description": "**Goal:** The gh-pages-pypi-demo-lib package exists, is installable, tested, and buildable; repo has a working dev venv.\n\n**Files:** Create packages/demo-lib/{pyproject.toml,README.md,src/gh_pages_pypi_demo_lib/__init__.py}; Test tests/test_packages.py\n\n**Verify:** .venv/bin/python -m pytest tests/test_packages.py -v\n\n```json:metadata\n{\"files\": [\"packages/demo-lib/pyproject.toml\", \"packages/demo-lib/README.md\", \"packages/demo-lib/src/gh_pages_pypi_demo_lib/__init__.py\", \"tests/test_packages.py\"], \"verifyCommand\": \".venv/bin/python -m pytest tests/test_packages.py -v\", \"acceptanceCriteria\": [\"venv exists with pytest, build, pyyaml\", \"greeting returns expected string\", \"build produces wheel and sdist\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 2: demo-app package (depends on demo-lib)",
+      "status": "completed",
+      "blockedBy": [1],
+      "description": "**Goal:** gh-pages-pypi-demo-app exists with a demo-app console script that uses gh-pages-pypi-demo-lib.\n\n**Files:** Create packages/demo-app/{pyproject.toml,README.md,src/gh_pages_pypi_demo_app/__init__.py}; Modify tests/test_packages.py\n\n**Verify:** .venv/bin/python -m pytest tests/test_packages.py -v (3 passed); .venv/bin/demo-app\n\n```json:metadata\n{\"files\": [\"packages/demo-app/pyproject.toml\", \"packages/demo-app/README.md\", \"packages/demo-app/src/gh_pages_pypi_demo_app/__init__.py\", \"tests/test_packages.py\"], \"verifyCommand\": \".venv/bin/python -m pytest tests/test_packages.py -v\", \"acceptanceCriteria\": [\"main prints greeting from lib\", \"console script installed\", \"build produces wheel and sdist\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 3: build_index.py PEP 503 index generator",
+      "status": "completed",
+      "blockedBy": [1],
+      "description": "**Goal:** Stdlib-only script turning GitHub release assets into a static PEP 503 index, unit-tested against fixture JSON.\n\n**Files:** Create scripts/build_index.py; Test tests/test_build_index.py\n\n**Verify:** .venv/bin/python -m pytest tests/test_build_index.py -v (5 passed)\n\n```json:metadata\n{\"files\": [\"scripts/build_index.py\", \"tests/test_build_index.py\"], \"verifyCommand\": \".venv/bin/python -m pytest tests/test_build_index.py -v\", \"acceptanceCriteria\": [\"normalize per PEP 503\", \"filename parsing with non-package assets ignored\", \"generated HTML with sha256 fragments\", \"fails loudly on empty index\"]}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 4: release.yml tag-triggered releases",
+      "status": "completed",
+      "description": "**Goal:** Pushing a tag like demo-lib-v1.0.0 builds that package and publishes a GitHub Release with wheel+sdist, then dispatches pages.yml.\n\n**Files:** Create .github/workflows/release.yml\n\n**Verify:** YAML parses via pyyaml\n\n```json:metadata\n{\"files\": [\".github/workflows/release.yml\"], \"verifyCommand\": \".venv/bin/python -c \\\"import yaml, pathlib; yaml.safe_load(pathlib.Path('.github/workflows/release.yml').read_text()); print('OK')\\\"\", \"acceptanceCriteria\": [\"tag trigger\", \"version mismatch fails\", \"release created with artifacts\", \"pages workflow dispatched\"]}\n```"
+    },
+    {
+      "id": 5,
+      "subject": "Task 5: pages.yml index build + Pages deploy",
+      "status": "completed",
+      "description": "**Goal:** Workflow regenerating the PEP 503 index from release assets and deploying to GitHub Pages.\n\n**Files:** Create .github/workflows/pages.yml\n\n**Verify:** YAML parses via pyyaml\n\n```json:metadata\n{\"files\": [\".github/workflows/pages.yml\"], \"verifyCommand\": \".venv/bin/python -c \\\"import yaml, pathlib; yaml.safe_load(pathlib.Path('.github/workflows/pages.yml').read_text()); print('OK')\\\"\", \"acceptanceCriteria\": [\"correct triggers\", \"index built with token\", \"official pages deploy actions\"]}\n```"
+    },
+    {
+      "id": 6,
+      "subject": "Task 6: README tutorial + full verification",
+      "status": "completed",
+      "blockedBy": [2, 3, 4, 5],
+      "description": "**Goal:** README explains the whole demo; full suite passes.\n\n**Files:** Modify README.md\n\n**Verify:** .venv/bin/python -m pytest tests/ -v (8 passed)\n\n```json:metadata\n{\"files\": [\"README.md\"], \"verifyCommand\": \".venv/bin/python -m pytest tests/ -v\", \"acceptanceCriteria\": [\"README complete per plan\", \"8 tests pass\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-08-04T00:00:00Z"
+}
