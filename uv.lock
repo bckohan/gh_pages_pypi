@@ -527,7 +527,7 @@ wheels = [
 
 [[package]]
 name = "github-releases-pypi"
-version = "0.1.0"
+version = "2026.8.6"
 source = { editable = "." }
 dependencies = [
     { name = "jinja2" },
@@ -661,7 +661,7 @@ typing = [
 
 [[package]]
 name = "github-releases-pypi-demo-app"
-version = "2026.8.4"
+version = "2026.8.6"
 source = { editable = "packages/demo-app" }
 dependencies = [
     { name = "github-releases-pypi-demo-lib" },
@@ -672,7 +672,7 @@ requires-dist = [{ name = "github-releases-pypi-demo-lib", specifier = ">=1.0.0"
 
 [[package]]
 name = "github-releases-pypi-demo-lib"
-version = "2026.8.4"
+version = "2026.8.6"
 source = { editable = "packages/demo-lib" }
 
 [[package]]

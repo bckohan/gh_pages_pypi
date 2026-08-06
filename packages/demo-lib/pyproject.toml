@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "github-releases-pypi-demo-lib"
-version = "2026.8.4"
+version = "2026.8.6"
 description = "Tiny greeting library demonstrating GitHub Pages as a PyPI index"
 readme = "README.md"
 requires-python = ">=3.9"

@@ -11,7 +11,7 @@ Serve a PyPI-compatible package index from GitHub Pages, built from GitHub relea
 """
 
 __title__ = "github-releases-pypi"
-__version__ = "0.1.0"
+__version__ = "2026.8.6"
 __author__ = "Brian Kohan"
 __license__ = "MIT"
 __copyright__ = "Copyright 2026 Brian Kohan"
