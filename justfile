@@ -243,7 +243,7 @@ validate_version VERSION:
     import tomllib
     from pathlib import Path
     from packaging.version import Version
-    import github_releases_pypi
+    import ghr_pypi
     raw_version = "{{ VERSION }}".lstrip("v")
     version_obj = Version(raw_version)
     assert str(version_obj) == raw_version, f"unnormalized version: {raw_version}"
@@ -254,13 +254,13 @@ validate_version VERSION:
     ):
         actual = tomllib.load(open(pyproject, "rb"))["project"]["version"]
         assert actual == raw_version, f"{pyproject} has {actual}, expected {raw_version}"
-    assert github_releases_pypi.__version__ == raw_version, (
-        f"github_releases_pypi.__version__ is {github_releases_pypi.__version__}, "
+    assert ghr_pypi.__version__ == raw_version, (
+        f"ghr_pypi.__version__ is {ghr_pypi.__version__}, "
         f"expected {raw_version}"
     )
     for init in (
-        "packages/demo-lib/src/github_releases_pypi_demo_lib/__init__.py",
-        "packages/demo-app/src/github_releases_pypi_demo_app/__init__.py",
+        "packages/demo-lib/src/ghr_pypi_demo_lib/__init__.py",
+        "packages/demo-app/src/ghr_pypi_demo_app/__init__.py",
     ):
         match = re.search(r'(?m)^__version__ = "(.*)"$', Path(init).read_text())
         assert match, f"no __version__ line in {init}"
@@ -282,9 +282,9 @@ _stamp-version:
         (Path("pyproject.toml"), r'(?m)^version = ".*"$', 'version = "{}"'),
         (Path("packages/demo-lib/pyproject.toml"), r'(?m)^version = ".*"$', 'version = "{}"'),
         (Path("packages/demo-app/pyproject.toml"), r'(?m)^version = ".*"$', 'version = "{}"'),
-        (Path("src/github_releases_pypi/__init__.py"), r'(?m)^__version__ = ".*"$', '__version__ = "{}"'),
-        (Path("packages/demo-lib/src/github_releases_pypi_demo_lib/__init__.py"), r'(?m)^__version__ = ".*"$', '__version__ = "{}"'),
-        (Path("packages/demo-app/src/github_releases_pypi_demo_app/__init__.py"), r'(?m)^__version__ = ".*"$', '__version__ = "{}"'),
+        (Path("src/ghr_pypi/__init__.py"), r'(?m)^__version__ = ".*"$', '__version__ = "{}"'),
+        (Path("packages/demo-lib/src/ghr_pypi_demo_lib/__init__.py"), r'(?m)^__version__ = ".*"$', '__version__ = "{}"'),
+        (Path("packages/demo-app/src/ghr_pypi_demo_app/__init__.py"), r'(?m)^__version__ = ".*"$', '__version__ = "{}"'),
     ]
 
     today = date.today()

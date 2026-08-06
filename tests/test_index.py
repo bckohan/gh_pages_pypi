@@ -5,23 +5,23 @@ import zipfile
 
 import pytest
 
-from github_releases_pypi import index
+from ghr_pypi import index
 
 FIXTURE_RELEASES = [
     {
         "tag_name": "demo-lib-v1.0.0",
         "assets": [
             {
-                "name": "github_releases_pypi_demo_lib-1.0.0-py3-none-any.whl",
-                "browser_download_url": "https://github.com/bckohan/github-releases-pypi/releases/download/demo-lib-v1.0.0/github_releases_pypi_demo_lib-1.0.0-py3-none-any.whl",
+                "name": "ghr_pypi_demo_lib-1.0.0-py3-none-any.whl",
+                "browser_download_url": "https://github.com/bckohan/ghr-pypi/releases/download/demo-lib-v1.0.0/ghr_pypi_demo_lib-1.0.0-py3-none-any.whl",
             },
             {
-                "name": "github_releases_pypi_demo_lib-1.0.0.tar.gz",
-                "browser_download_url": "https://github.com/bckohan/github-releases-pypi/releases/download/demo-lib-v1.0.0/github_releases_pypi_demo_lib-1.0.0.tar.gz",
+                "name": "ghr_pypi_demo_lib-1.0.0.tar.gz",
+                "browser_download_url": "https://github.com/bckohan/ghr-pypi/releases/download/demo-lib-v1.0.0/ghr_pypi_demo_lib-1.0.0.tar.gz",
             },
             {
                 "name": "release-notes.txt",
-                "browser_download_url": "https://github.com/bckohan/github-releases-pypi/releases/download/demo-lib-v1.0.0/release-notes.txt",
+                "browser_download_url": "https://github.com/bckohan/ghr-pypi/releases/download/demo-lib-v1.0.0/release-notes.txt",
             },
         ],
     },
@@ -29,8 +29,8 @@ FIXTURE_RELEASES = [
         "tag_name": "demo-app-v1.0.0",
         "assets": [
             {
-                "name": "github_releases_pypi_demo_app-1.0.0-py3-none-any.whl",
-                "browser_download_url": "https://github.com/bckohan/github-releases-pypi/releases/download/demo-app-v1.0.0/github_releases_pypi_demo_app-1.0.0-py3-none-any.whl",
+                "name": "ghr_pypi_demo_app-1.0.0-py3-none-any.whl",
+                "browser_download_url": "https://github.com/bckohan/ghr-pypi/releases/download/demo-app-v1.0.0/ghr_pypi_demo_app-1.0.0-py3-none-any.whl",
             },
         ],
     },
@@ -39,8 +39,8 @@ FIXTURE_RELEASES = [
         "draft": True,
         "assets": [
             {
-                "name": "github_releases_pypi_demo_lib-2.0.0-py3-none-any.whl",
-                "browser_download_url": "https://github.com/bckohan/github-releases-pypi/releases/download/demo-lib-v2.0.0/github_releases_pypi_demo_lib-2.0.0-py3-none-any.whl",
+                "name": "ghr_pypi_demo_lib-2.0.0-py3-none-any.whl",
+                "browser_download_url": "https://github.com/bckohan/ghr-pypi/releases/download/demo-lib-v2.0.0/ghr_pypi_demo_lib-2.0.0-py3-none-any.whl",
             },
         ],
     },
@@ -52,19 +52,17 @@ def fake_hash(url):
 
 
 def test_normalize():
-    assert index.normalize("GitHub_Releases.PyPI--Demo") == "github-releases-pypi-demo"
+    assert index.normalize("GHR_PyPI--Demo") == "ghr-pypi-demo"
 
 
 def test_project_name_from_filename():
     assert (
-        index.project_name_from_filename(
-            "github_releases_pypi_demo_lib-1.0.0-py3-none-any.whl"
-        )
-        == "github_releases_pypi_demo_lib"
+        index.project_name_from_filename("ghr_pypi_demo_lib-1.0.0-py3-none-any.whl")
+        == "ghr_pypi_demo_lib"
     )
     assert (
-        index.project_name_from_filename("github_releases_pypi_demo_lib-1.0.0.tar.gz")
-        == "github_releases_pypi_demo_lib"
+        index.project_name_from_filename("ghr_pypi_demo_lib-1.0.0.tar.gz")
+        == "ghr_pypi_demo_lib"
     )
     assert index.project_name_from_filename("release-notes.txt") is None
 
@@ -72,13 +70,13 @@ def test_project_name_from_filename():
 def test_collect_projects():
     projects = index.collect_projects(FIXTURE_RELEASES, hash_url=fake_hash)
     assert sorted(projects) == [
-        "github-releases-pypi-demo-app",
-        "github-releases-pypi-demo-lib",
+        "ghr-pypi-demo-app",
+        "ghr-pypi-demo-lib",
     ]
-    lib_files = projects["github-releases-pypi-demo-lib"]
+    lib_files = projects["ghr-pypi-demo-lib"]
     assert [f["filename"] for f in lib_files] == [
-        "github_releases_pypi_demo_lib-1.0.0-py3-none-any.whl",
-        "github_releases_pypi_demo_lib-1.0.0.tar.gz",
+        "ghr_pypi_demo_lib-1.0.0-py3-none-any.whl",
+        "ghr_pypi_demo_lib-1.0.0.tar.gz",
     ]
     assert all(f["sha256"] == "cafef00d" for f in lib_files)
 
@@ -88,8 +86,8 @@ def test_collect_projects_dedupes_duplicate_filenames(capsys):
         "tag_name": "mirror-v1.0.0",
         "assets": [
             {
-                "name": "github_releases_pypi_demo_lib-1.0.0-py3-none-any.whl",
-                "browser_download_url": "https://github.com/other/mirror/releases/download/v1/github_releases_pypi_demo_lib-1.0.0-py3-none-any.whl",
+                "name": "ghr_pypi_demo_lib-1.0.0-py3-none-any.whl",
+                "browser_download_url": "https://github.com/other/mirror/releases/download/v1/ghr_pypi_demo_lib-1.0.0-py3-none-any.whl",
             },
         ],
     }
@@ -102,13 +100,13 @@ def test_collect_projects_dedupes_duplicate_filenames(capsys):
     projects = index.collect_projects(
         FIXTURE_RELEASES + [duplicate], hash_url=counting_hash
     )
-    lib_files = projects["github-releases-pypi-demo-lib"]
+    lib_files = projects["ghr-pypi-demo-lib"]
     whl = [f for f in lib_files if f["filename"].endswith(".whl")]
     assert len(whl) == 1
-    assert "bckohan/github-releases-pypi" in whl[0]["url"]  # first occurrence won
+    assert "bckohan/ghr-pypi" in whl[0]["url"]  # first occurrence won
     assert not any("other/mirror" in url for url in hashed)  # duplicate never hashed
     assert (
-        "duplicate asset github_releases_pypi_demo_lib-1.0.0-py3-none-any.whl"
+        "duplicate asset ghr_pypi_demo_lib-1.0.0-py3-none-any.whl"
         in capsys.readouterr().err
     )
 
@@ -139,23 +137,21 @@ def test_write_site(tmp_path):
     index.write_site(
         projects,
         tmp_path,
-        title="bckohan/github-releases-pypi package index",
-        index_url="https://bckohan.github.io/github-releases-pypi/simple/",
+        title="bckohan/ghr-pypi package index",
+        index_url="https://bckohan.github.io/ghr-pypi/simple/",
     )
 
     landing = (tmp_path / "index.html").read_text()
-    assert "https://bckohan.github.io/github-releases-pypi/simple/" in landing
-    assert "bckohan/github-releases-pypi package index" in landing
+    assert "https://bckohan.github.io/ghr-pypi/simple/" in landing
+    assert "bckohan/ghr-pypi package index" in landing
 
     root = (tmp_path / "simple" / "index.html").read_text()
-    assert '<a href="github-releases-pypi-demo-lib/">' in root
-    assert '<a href="github-releases-pypi-demo-app/">' in root
+    assert '<a href="ghr-pypi-demo-lib/">' in root
+    assert '<a href="ghr-pypi-demo-app/">' in root
 
-    lib_page = (
-        tmp_path / "simple" / "github-releases-pypi-demo-lib" / "index.html"
-    ).read_text()
+    lib_page = (tmp_path / "simple" / "ghr-pypi-demo-lib" / "index.html").read_text()
     assert "#sha256=cafef00d" in lib_page
-    assert "github_releases_pypi_demo_lib-1.0.0-py3-none-any.whl</a>" in lib_page
+    assert "ghr_pypi_demo_lib-1.0.0-py3-none-any.whl</a>" in lib_page
     assert '<meta name="pypi:repository-version" content="1.0"' in lib_page
 
 
@@ -579,7 +575,7 @@ def test_collect_projects_captures_size_and_upload_time():
 
 def test_collect_projects_defaults_size_and_upload_time():
     entry = index.collect_projects(FIXTURE_RELEASES, hash_url=fake_hash)[
-        "github-releases-pypi-demo-lib"
+        "ghr-pypi-demo-lib"
     ][0]
     assert entry["size"] == 0
     assert entry["upload_time"] is None
@@ -589,15 +585,13 @@ def test_write_site_json_project_page(tmp_path):
     projects = index.collect_projects(FIXTURE_RELEASES, hash_url=fake_hash)
     index.write_site(projects, tmp_path, title="T", index_url=None)
     data = json.loads(
-        (
-            tmp_path / "simple" / "github-releases-pypi-demo-lib" / "index.json"
-        ).read_text()
+        (tmp_path / "simple" / "ghr-pypi-demo-lib" / "index.json").read_text()
     )
     assert data["meta"] == {"api-version": "1.1"}
-    assert data["name"] == "github-releases-pypi-demo-lib"
+    assert data["name"] == "ghr-pypi-demo-lib"
     assert data["versions"] == ["1.0.0"]
     files = {f["filename"]: f for f in data["files"]}
-    whl = files["github_releases_pypi_demo_lib-1.0.0-py3-none-any.whl"]
+    whl = files["ghr_pypi_demo_lib-1.0.0-py3-none-any.whl"]
     assert whl["hashes"] == {"sha256": "cafef00d"}
     assert whl["size"] == 0
     assert "upload-time" not in whl
@@ -609,8 +603,8 @@ def test_write_site_json_root(tmp_path):
     index.write_site(projects, tmp_path, title="T", index_url=None)
     data = json.loads((tmp_path / "simple" / "index.json").read_text())
     assert data["meta"] == {"api-version": "1.1"}
-    assert {"name": "github-releases-pypi-demo-lib"} in data["projects"]
-    assert {"name": "github-releases-pypi-demo-app"} in data["projects"]
+    assert {"name": "ghr-pypi-demo-lib"} in data["projects"]
+    assert {"name": "ghr-pypi-demo-app"} in data["projects"]
 
 
 def test_write_site_json_empty_hashes_and_upload_time(tmp_path):
@@ -687,7 +681,7 @@ def test_collect_projects_source_repo():
     projects = index.collect_projects(METADATA_RELEASE, hash_url=never_hash)
     assert projects["hasmeta"][0]["source_repo"] == "o/meta"
     untagged = index.collect_projects(FIXTURE_RELEASES, hash_url=fake_hash)
-    assert untagged["github-releases-pypi-demo-lib"][0]["source_repo"] == ""
+    assert untagged["ghr-pypi-demo-lib"][0]["source_repo"] == ""
 
 
 def test_collect_projects_metadata_disabled():
@@ -842,6 +836,4 @@ def test_write_site_formats_json_only(tmp_path):
     index.write_site(projects, tmp_path, title="T", index_url=None, formats=("json",))
     assert not list(tmp_path.rglob("*.html"))
     assert (tmp_path / "simple" / "index.json").exists()
-    assert (
-        tmp_path / "simple" / "github-releases-pypi-demo-lib" / "index.json"
-    ).exists()
+    assert (tmp_path / "simple" / "ghr-pypi-demo-lib" / "index.json").exists()

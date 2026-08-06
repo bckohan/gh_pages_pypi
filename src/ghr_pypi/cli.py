@@ -1,4 +1,4 @@
-"""Typer command line interface for github-releases-pypi."""
+"""Typer command line interface for ghr-pypi."""
 
 import urllib.error
 from pathlib import Path
@@ -6,8 +6,8 @@ from typing import Annotated
 
 import typer
 
-from github_releases_pypi import index
-from github_releases_pypi.config import Config, ConfigError, load
+from ghr_pypi import index
+from ghr_pypi.config import Config, ConfigError, load
 
 app = typer.Typer(add_completion=False)
 

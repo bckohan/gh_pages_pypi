@@ -1,5 +1,5 @@
 [project]
-name = "github-releases-pypi"
+name = "ghr-pypi"
 version = "2026.8.6.1"
 description = "Serve a PyPI-compatible package index from GitHub Pages, built from GitHub release assets."
 requires-python = ">=3.10,<4.0"
@@ -10,8 +10,8 @@ license = "MIT"
 license-files = [ "LICENSE" ]
 
 readme = "README.md"
-repository = "https://github.com/bckohan/github-releases-pypi"
-homepage = "https://github-releases-pypi.readthedocs.io"
+repository = "https://github.com/bckohan/ghr-pypi"
+homepage = "https://ghr-pypi.readthedocs.io"
 keywords = []
 dependencies = [
     "typer>=0.15",
@@ -22,7 +22,7 @@ dependencies = [
 classifiers = [
     "Operating System :: OS Independent",
     "Topic :: Software Development :: Libraries :: Python Modules",
-    "Development Status :: 1 - Planning",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
 
@@ -38,7 +38,7 @@ classifiers = [
 ]
 
 [project.scripts]
-github-releases-pypi = "github_releases_pypi.cli:app"
+ghr-pypi = "ghr_pypi.cli:app"
 
 [build-system]
 requires = ["hatchling"]
@@ -48,18 +48,18 @@ build-backend = "hatchling.build"
 package = true
 
 [tool.uv.sources]
-github-releases-pypi-demo-lib = { path = "packages/demo-lib", editable = true }
-github-releases-pypi-demo-app = { path = "packages/demo-app", editable = true }
+ghr-pypi-demo-lib = { path = "packages/demo-lib", editable = true }
+ghr-pypi-demo-app = { path = "packages/demo-app", editable = true }
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/github_releases_pypi"]
+packages = ["src/ghr_pypi"]
 
 [project.urls]
-"Homepage"      = "https://github-releases-pypi.readthedocs.io"
-"Documentation" = "https://github-releases-pypi.readthedocs.io"
-"Repository"    = "https://github.com/bckohan/github-releases-pypi"
-"Issues"        = "https://github.com/bckohan/github-releases-pypi/issues"
-"Changelog"     = "https://github-releases-pypi.readthedocs.io/en/latest/changelog.html"
+"Homepage"      = "https://ghr-pypi.readthedocs.io"
+"Documentation" = "https://ghr-pypi.readthedocs.io"
+"Repository"    = "https://github.com/bckohan/ghr-pypi"
+"Issues"        = "https://github.com/bckohan/ghr-pypi/issues"
+"Changelog"     = "https://ghr-pypi.readthedocs.io/en/latest/changelog.html"
 
 [dependency-groups]
 docs = [
@@ -87,8 +87,8 @@ test = [
     "pytest>=8.3.4",
     "pytest-cov>=6.0.0",
     "packaging>=24.2",
-    "github-releases-pypi-demo-lib",
-    "github-releases-pypi-demo-app",
+    "ghr-pypi-demo-lib",
+    "ghr-pypi-demo-app",
 ]
 dev = [
     { include-group = "typing" },
@@ -106,12 +106,12 @@ dev = [
 check_untyped_defs = true
 ignore_missing_imports = true
 mypy_path = ["src"]
-packages = ["github_releases_pypi"]
+packages = ["ghr_pypi"]
 
 [tool.pyright]
 pythonVersion = "3.10"
 typeCheckingMode = "basic"
-include = ["src/github_releases_pypi"]
+include = ["src/ghr_pypi"]
 reportMissingImports = true
 reportMissingTypeStubs = false
 reportUnusedImport = true
@@ -126,21 +126,21 @@ python_files = "test*.py"
 norecursedirs = "*.egg .eggs dist build docs .tox .git __pycache__"
 addopts = [
     "--strict-markers",
-    "--cov=github_releases_pypi",
+    "--cov=ghr_pypi",
     "--cov-branch",
     "--cov-report=term-missing:skip-covered",
 ]
 
 [tool.coverage.run]
 branch = true
-source = ["github_releases_pypi"]
+source = ["ghr_pypi"]
 concurrency = ["thread", "multiprocessing"]
 parallel = true
 relative_files = true
-command_line = "-m pytest --cov=github_releases_pypi"
+command_line = "-m pytest --cov=ghr_pypi"
 
 [tool.coverage.paths]
-source = ["github_releases_pypi"]
+source = ["ghr_pypi"]
 
 [tool.ruff]
 line-length = 88

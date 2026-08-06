@@ -5,7 +5,7 @@
 # with GITHUB_TOKEN do not fire `release` events).
 #
 # NOTE: this fails by design while the repository has no releases yet —
-# github-releases-pypi refuses to deploy an empty index.
+# ghr-pypi refuses to deploy an empty index.
 name: pages
 
 on:
@@ -39,13 +39,13 @@ jobs:
         with:
           enable-cache: false
 
-      # Runs the github-releases-pypi CLI from this repo's own source — the repo
+      # Runs the ghr-pypi CLI from this repo's own source — the repo
       # dogfoods the tool it publishes. Other repos would use:
-      #   uvx github-releases-pypi "$GITHUB_REPOSITORY" --out site
+      #   uvx ghr-pypi "$GITHUB_REPOSITORY" --out site
       - name: Build the package index
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: uv run --locked --no-default-groups github-releases-pypi "$GITHUB_REPOSITORY" --out site
+        run: uv run --locked --no-default-groups ghr-pypi "$GITHUB_REPOSITORY" --out site
 
       # Fails fast with a clear error if Pages isn't enabled for this repo.
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0

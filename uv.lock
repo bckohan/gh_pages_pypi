@@ -514,19 +514,7 @@ wheels = [
 ]
 
 [[package]]
-name = "gitdb"
-version = "4.0.12"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "smmap" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/72/94/63b0fc47eb32792c7ba1fe1b694daec9a63620db1e313033d18140c2320a/gitdb-4.0.12.tar.gz", hash = "sha256:5ef71f855d191a3326fcfbc0d5da835f26b13fbcba60c32c21091c349ffdb571", size = 394684, upload-time = "2025-01-02T07:20:46.413Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a0/61/5c78b91c3143ed5c14207f463aecfc8f9dbb5092fb2869baf37c273b2705/gitdb-4.0.12-py3-none-any.whl", hash = "sha256:67073e15955400952c6565cc3e707c554a4eea2e428946f7a4c162fab9bd9bcf", size = 62794, upload-time = "2025-01-02T07:20:43.624Z" },
-]
-
-[[package]]
-name = "github-releases-pypi"
+name = "ghr-pypi"
 version = "2026.8.6.1"
 source = { editable = "." }
 dependencies = [
@@ -545,8 +533,8 @@ dev = [
     { name = "coverage", extra = ["toml"] },
     { name = "doc8" },
     { name = "furo" },
-    { name = "github-releases-pypi-demo-app" },
-    { name = "github-releases-pypi-demo-lib" },
+    { name = "ghr-pypi-demo-app" },
+    { name = "ghr-pypi-demo-lib" },
     { name = "ipdb" },
     { name = "ipython", version = "8.39.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "ipython", version = "9.16.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
@@ -586,8 +574,8 @@ lint = [
 ]
 test = [
     { name = "coverage", extra = ["toml"] },
-    { name = "github-releases-pypi-demo-app" },
-    { name = "github-releases-pypi-demo-lib" },
+    { name = "ghr-pypi-demo-app" },
+    { name = "ghr-pypi-demo-lib" },
     { name = "packaging" },
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -613,8 +601,8 @@ dev = [
     { name = "coverage", extras = ["toml"], specifier = ">=7.15.2" },
     { name = "doc8", specifier = ">=1.1.2" },
     { name = "furo", specifier = ">=2024.8.6" },
-    { name = "github-releases-pypi-demo-app", editable = "packages/demo-app" },
-    { name = "github-releases-pypi-demo-lib", editable = "packages/demo-lib" },
+    { name = "ghr-pypi-demo-app", editable = "packages/demo-app" },
+    { name = "ghr-pypi-demo-lib", editable = "packages/demo-lib" },
     { name = "ipdb", specifier = ">=0.13.13" },
     { name = "ipython", specifier = ">=8.18.1" },
     { name = "mypy", specifier = ">=1.19.1" },
@@ -647,8 +635,8 @@ lint = [
 ]
 test = [
     { name = "coverage", extras = ["toml"], specifier = ">=7.15.2" },
-    { name = "github-releases-pypi-demo-app", editable = "packages/demo-app" },
-    { name = "github-releases-pypi-demo-lib", editable = "packages/demo-lib" },
+    { name = "ghr-pypi-demo-app", editable = "packages/demo-app" },
+    { name = "ghr-pypi-demo-lib", editable = "packages/demo-lib" },
     { name = "packaging", specifier = ">=24.2" },
     { name = "pytest", specifier = ">=8.3.4" },
     { name = "pytest-cov", specifier = ">=6.0.0" },
@@ -660,20 +648,32 @@ typing = [
 ]
 
 [[package]]
-name = "github-releases-pypi-demo-app"
+name = "ghr-pypi-demo-app"
 version = "2026.8.6.1"
 source = { editable = "packages/demo-app" }
 dependencies = [
-    { name = "github-releases-pypi-demo-lib" },
+    { name = "ghr-pypi-demo-lib" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "github-releases-pypi-demo-lib", specifier = ">=1.0.0" }]
+requires-dist = [{ name = "ghr-pypi-demo-lib", specifier = ">=1.0.0" }]
 
 [[package]]
-name = "github-releases-pypi-demo-lib"
+name = "ghr-pypi-demo-lib"
 version = "2026.8.6.1"
 source = { editable = "packages/demo-lib" }
+
+[[package]]
+name = "gitdb"
+version = "4.0.12"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "smmap" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/72/94/63b0fc47eb32792c7ba1fe1b694daec9a63620db1e313033d18140c2320a/gitdb-4.0.12.tar.gz", hash = "sha256:5ef71f855d191a3326fcfbc0d5da835f26b13fbcba60c32c21091c349ffdb571", size = 394684, upload-time = "2025-01-02T07:20:46.413Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a0/61/5c78b91c3143ed5c14207f463aecfc8f9dbb5092fb2869baf37c273b2705/gitdb-4.0.12-py3-none-any.whl", hash = "sha256:67073e15955400952c6565cc3e707c554a4eea2e428946f7a4c162fab9bd9bcf", size = 62794, upload-time = "2025-01-02T07:20:43.624Z" },
+]
 
 [[package]]
 name = "gitpython"

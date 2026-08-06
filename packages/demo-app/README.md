@@ -1,5 +1,5 @@
-# github-releases-pypi-demo-app
+# ghr-pypi-demo-app
 
-A tiny CLI that depends on `github-releases-pypi-demo-lib`. Installing it from the
+A tiny CLI that depends on `ghr-pypi-demo-lib`. Installing it from the
 GitHub Pages index proves the index resolves dependencies too. See the
-[repository README](https://github.com/bckohan/github-releases-pypi) for the full demo.
+[repository README](https://github.com/bckohan/ghr-pypi) for the full demo.

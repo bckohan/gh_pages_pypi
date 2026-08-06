@@ -1,7 +1,7 @@
 from typer.testing import CliRunner
 
-from github_releases_pypi import index
-from github_releases_pypi.cli import app
+from ghr_pypi import index
+from ghr_pypi.cli import app
 from tests.test_index import FIXTURE_RELEASES
 
 runner = CliRunner()
@@ -22,9 +22,7 @@ def fetch_stub(releases):
 
 def test_cli_requires_token(tmp_path, monkeypatch):
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-    result = runner.invoke(
-        app, ["bckohan/github-releases-pypi", "--out", str(tmp_path)]
-    )
+    result = runner.invoke(app, ["bckohan/ghr-pypi", "--out", str(tmp_path)])
     assert result.exit_code == 1
     assert "provide --token or set GITHUB_TOKEN" in all_output(result)
 
@@ -32,7 +30,7 @@ def test_cli_requires_token(tmp_path, monkeypatch):
 def test_cli_fails_with_no_packages(tmp_path, monkeypatch):
     monkeypatch.setattr(index, "fetch_releases", lambda repo, token: [])
     result = runner.invoke(
-        app, ["bckohan/github-releases-pypi", "--out", str(tmp_path), "--token", "x"]
+        app, ["bckohan/ghr-pypi", "--out", str(tmp_path), "--token", "x"]
     )
     assert result.exit_code == 1
     assert "no package assets" in all_output(result)
@@ -46,34 +44,28 @@ def test_cli_reports_api_failure(tmp_path, monkeypatch):
 
     monkeypatch.setattr(index, "fetch_releases", boom)
     result = runner.invoke(
-        app, ["bckohan/github-releases-pypi", "--out", str(tmp_path), "--token", "x"]
+        app, ["bckohan/ghr-pypi", "--out", str(tmp_path), "--token", "x"]
     )
     assert result.exit_code == 1
-    assert "GitHub API request for bckohan/github-releases-pypi failed" in all_output(
-        result
-    )
+    assert "GitHub API request for bckohan/ghr-pypi failed" in all_output(result)
 
 
 def test_cli_writes_site(tmp_path, monkeypatch):
     monkeypatch.setattr(index, "fetch_releases", fetch_stub(FIXTURE_RELEASES))
     monkeypatch.setattr(index, "hash_url", lambda url: "cafef00d")
     result = runner.invoke(
-        app, ["bckohan/github-releases-pypi", "--out", str(tmp_path), "--token", "x"]
+        app, ["bckohan/ghr-pypi", "--out", str(tmp_path), "--token", "x"]
     )
     assert result.exit_code == 0, all_output(result)
     assert "wrote index for 2 project(s)" in result.output
-    assert (
-        tmp_path / "simple" / "github-releases-pypi-demo-lib" / "index.html"
-    ).exists()
+    assert (tmp_path / "simple" / "ghr-pypi-demo-lib" / "index.html").exists()
 
 
 def test_cli_token_from_env(tmp_path, monkeypatch):
     monkeypatch.setenv("GITHUB_TOKEN", "x")
     monkeypatch.setattr(index, "fetch_releases", fetch_stub(FIXTURE_RELEASES))
     monkeypatch.setattr(index, "hash_url", lambda url: "cafef00d")
-    result = runner.invoke(
-        app, ["bckohan/github-releases-pypi", "--out", str(tmp_path)]
-    )
+    result = runner.invoke(app, ["bckohan/ghr-pypi", "--out", str(tmp_path)])
     assert result.exit_code == 0, all_output(result)
     assert (tmp_path / "simple" / "index.html").exists()
 
@@ -111,7 +103,7 @@ def test_cli_config_merges_repositories(tmp_path, monkeypatch):
         },
     ]
     releases_by_repo = {
-        "bckohan/github-releases-pypi": FIXTURE_RELEASES,
+        "bckohan/ghr-pypi": FIXTURE_RELEASES,
         "someorg/other-project": second_repo_releases,
     }
     monkeypatch.setattr(
@@ -124,7 +116,7 @@ def test_cli_config_merges_repositories(tmp_path, monkeypatch):
         tmp_path,
         """
 repositories:
-  - bckohan/github-releases-pypi
+  - bckohan/ghr-pypi
   - someorg/other-project
 title: Aggregated Index
 """,
@@ -136,7 +128,7 @@ title: Aggregated Index
     assert result.exit_code == 0, all_output(result)
     assert "wrote index for 3 project(s)" in result.output
     assert (out / "simple" / "otherpkg" / "index.html").exists()
-    assert (out / "simple" / "github-releases-pypi-demo-lib" / "index.html").exists()
+    assert (out / "simple" / "ghr-pypi-demo-lib" / "index.html").exists()
     landing = (out / "index.html").read_text()
     assert "Aggregated Index" in landing
     assert "--extra-index-url" not in landing  # no url in config
@@ -162,7 +154,7 @@ def test_cli_config_url_failure_names_repo(tmp_path, monkeypatch):
     monkeypatch.setattr(index, "fetch_releases", boom)
     cfg = config_file(
         tmp_path,
-        "repositories: [bckohan/github-releases-pypi, someorg/other-project]\n",
+        "repositories: [bckohan/ghr-pypi, someorg/other-project]\n",
     )
     result = runner.invoke(
         app, ["--config", str(cfg), "--out", str(tmp_path), "--token", "x"]
@@ -239,7 +231,7 @@ def test_cli_mirror_flag(tmp_path, monkeypatch):
     result = runner.invoke(
         app,
         [
-            "bckohan/github-releases-pypi",
+            "bckohan/ghr-pypi",
             "--out",
             str(out),
             "--token",
@@ -249,7 +241,7 @@ def test_cli_mirror_flag(tmp_path, monkeypatch):
     )
     assert result.exit_code == 0, all_output(result)
     assert calls == [(out, "tok")]
-    page = (out / "simple" / "github-releases-pypi-demo-lib" / "index.html").read_text()
+    page = (out / "simple" / "ghr-pypi-demo-lib" / "index.html").read_text()
     assert "../../files/x/" in page
 
 
@@ -293,7 +285,7 @@ def test_cli_mirror_error_surfaces(tmp_path, monkeypatch):
     result = runner.invoke(
         app,
         [
-            "bckohan/github-releases-pypi",
+            "bckohan/ghr-pypi",
             "--out",
             str(tmp_path),
             "--token",
@@ -316,7 +308,7 @@ def test_cli_reports_asset_download_failure(tmp_path, monkeypatch):
     monkeypatch.setattr(index, "hash_url", boom)
     result = runner.invoke(
         app,
-        ["bckohan/github-releases-pypi", "--out", str(tmp_path), "--token", "x"],
+        ["bckohan/ghr-pypi", "--out", str(tmp_path), "--token", "x"],
     )
     assert result.exit_code == 1
     assert "downloading a release asset failed" in all_output(result)
@@ -423,7 +415,7 @@ def test_cli_mirror_runs_extraction(tmp_path, monkeypatch):
     out = tmp_path / "site"
     result = runner.invoke(
         app,
-        ["bckohan/github-releases-pypi", "--out", str(out), "--token", "t", "--mirror"],
+        ["bckohan/ghr-pypi", "--out", str(out), "--token", "t", "--mirror"],
     )
     assert result.exit_code == 0, all_output(result)
     assert extract_calls == [out]
@@ -460,7 +452,7 @@ def test_cli_mirror_network_failure(tmp_path, monkeypatch):
     result = runner.invoke(
         app,
         [
-            "bckohan/github-releases-pypi",
+            "bckohan/ghr-pypi",
             "--out",
             str(tmp_path),
             "--token",

@@ -1,2 +1,2 @@
 
-.. _repo: https://github.com/bckohan/github-releases-pypi
+.. _repo: https://github.com/bckohan/ghr-pypi

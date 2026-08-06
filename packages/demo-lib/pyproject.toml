@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "github-releases-pypi-demo-lib"
+name = "ghr-pypi-demo-lib"
 version = "2026.8.6.1"
 description = "Tiny greeting library demonstrating GitHub Pages as a PyPI index"
 readme = "README.md"
@@ -11,4 +11,4 @@ requires-python = ">=3.9"
 license = { text = "CC0-1.0" }
 
 [project.urls]
-Repository = "https://github.com/bckohan/github-releases-pypi"
+Repository = "https://github.com/bckohan/ghr-pypi"

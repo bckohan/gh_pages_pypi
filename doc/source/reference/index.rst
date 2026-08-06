@@ -6,7 +6,7 @@
 Reference
 =========
 
-.. automodule:: github_releases_pypi
+.. automodule:: ghr_pypi
 
 |
 

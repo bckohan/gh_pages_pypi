@@ -1,5 +1,5 @@
-from github_releases_pypi_demo_lib import greeting
-from github_releases_pypi_demo_app import main
+from ghr_pypi_demo_lib import greeting
+from ghr_pypi_demo_app import main
 
 
 def test_greeting():

@@ -1,4 +1,4 @@
-import github_releases_pypi
+import ghr_pypi
 
 
 # -- Unittest style tests -----------------------------------------------------
@@ -17,4 +17,4 @@ import github_releases_pypi
 
 def test_example():
     """Example pytest functional test."""
-    assert github_releases_pypi.__title__ == "github-releases-pypi"
+    assert ghr_pypi.__title__ == "ghr-pypi"

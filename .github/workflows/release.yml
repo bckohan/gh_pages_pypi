@@ -11,7 +11,9 @@ concurrency:
 on:
   push:
     tags:
-      - "v[0-9]*.[0-9]*.[0-9]*" # CalVer tags, e.g. v2026.8.5 or v2026.8.5.1
+      # CalVer tags, e.g. v2026.8.5 or v2026.8.5.1
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+.[0-9]+"
 
 jobs:
   lint:

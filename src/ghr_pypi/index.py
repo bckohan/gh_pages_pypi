@@ -26,7 +26,7 @@ from jinja2 import (
 )
 from packaging.version import InvalidVersion, Version
 
-from github_releases_pypi.config import Formats, MissingDigest
+from ghr_pypi.config import Formats, MissingDigest
 
 API_ROOT = "https://api.github.com"
 
@@ -63,7 +63,7 @@ def build_env(templates_dir: Path | None = None) -> Environment:
     override can ``{% extends "builtin/landing.html" %}`` without recursing
     into itself.
     """
-    builtin = PackageLoader("github_releases_pypi")
+    builtin = PackageLoader("ghr_pypi")
     loaders: list = []
     if templates_dir is not None:
         loaders.append(FileSystemLoader(templates_dir))

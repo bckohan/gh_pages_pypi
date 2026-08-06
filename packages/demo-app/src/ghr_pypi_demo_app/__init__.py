@@ -2,7 +2,7 @@
 
 import sys
 
-from github_releases_pypi_demo_lib import greeting
+from ghr_pypi_demo_lib import greeting
 
 __version__ = "2026.8.6.1"
 

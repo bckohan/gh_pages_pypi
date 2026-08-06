@@ -1,13 +1,13 @@
-# github-releases-pypi
+# ghr-pypi
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-[![PyPI version](https://badge.fury.io/py/github-releases-pypi.svg)](https://pypi.python.org/pypi/github-releases-pypi/)
-[![PyPI pyversions](https://img.shields.io/pypi/pyversions/github-releases-pypi.svg)](https://pypi.python.org/pypi/github-releases-pypi/)
-[![PyPI status](https://img.shields.io/pypi/status/github-releases-pypi.svg)](https://pypi.python.org/pypi/github-releases-pypi)
-[![Documentation Status](https://readthedocs.org/projects/github-releases-pypi/badge/?version=latest)](http://github-releases-pypi.readthedocs.io/?badge=latest/)
-[![Code Cov](https://codecov.io/gh/bckohan/github-releases-pypi/branch/main/graph/badge.svg)](https://codecov.io/gh/bckohan/github-releases-pypi)
-[![Test Status](https://github.com/bckohan/github-releases-pypi/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/bckohan/github-releases-pypi/actions/workflows/test.yml?query=branch:main)
-[![Lint Status](https://github.com/bckohan/github-releases-pypi/actions/workflows/lint.yml/badge.svg?branch=main)](https://github.com/bckohan/github-releases-pypi/actions/workflows/lint.yml?query=branch:main)
+[![PyPI version](https://badge.fury.io/py/ghr-pypi.svg)](https://pypi.python.org/pypi/ghr-pypi/)
+[![PyPI pyversions](https://img.shields.io/pypi/pyversions/ghr-pypi.svg)](https://pypi.python.org/pypi/ghr-pypi/)
+[![PyPI status](https://img.shields.io/pypi/status/ghr-pypi.svg)](https://pypi.python.org/pypi/ghr-pypi)
+[![Documentation Status](https://readthedocs.org/projects/ghr-pypi/badge/?version=latest)](http://ghr-pypi.readthedocs.io/?badge=latest/)
+[![Code Cov](https://codecov.io/gh/bckohan/ghr-pypi/branch/main/graph/badge.svg)](https://codecov.io/gh/bckohan/ghr-pypi)
+[![Test Status](https://github.com/bckohan/ghr-pypi/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/bckohan/ghr-pypi/actions/workflows/test.yml?query=branch:main)
+[![Lint Status](https://github.com/bckohan/ghr-pypi/actions/workflows/lint.yml/badge.svg?branch=main)](https://github.com/bckohan/ghr-pypi/actions/workflows/lint.yml?query=branch:main)
 
 Serve a **PyPI-compatible package index from GitHub Pages**, built from
 **GitHub release assets**. No index server, nothing published to pypi.org —
@@ -15,21 +15,21 @@ just static PEP 503 HTML and PEP 691 JSON, rebuilt automatically on every
 release.
 
 This repository is both the tool and its own demo: the index at
-[bckohan.github.io/github-releases-pypi](https://bckohan.github.io/github-releases-pypi/)
+[bckohan.github.io/ghr-pypi](https://bckohan.github.io/ghr-pypi/)
 is built by this tool from this repo's releases.
 
 ## Installation
 
 ```bash
-pip install github-releases-pypi
+pip install ghr-pypi
 # or run it without installing:
-uvx github-releases-pypi --help
+uvx ghr-pypi --help
 ```
 
 ## Usage
 
 ```bash
-github-releases-pypi OWNER/REPO --out site [--token TOKEN]
+ghr-pypi OWNER/REPO --out site [--token TOKEN]
 ```
 
 Reads every (non-draft) release of `OWNER/REPO` via the GitHub API
@@ -61,7 +61,7 @@ can never deploy a blank package index.
    - name: Build the package index
      env:
        GITHUB_TOKEN: ${{ github.token }}
-     run: uvx github-releases-pypi "$GITHUB_REPOSITORY" --out site
+     run: uvx ghr-pypi "$GITHUB_REPOSITORY" --out site
    - uses: actions/upload-pages-artifact@v3
      with:
        path: site
@@ -95,7 +95,7 @@ metadata: true                          # optional — see "Dependency metadata"
 ```
 
 ```sh
-github-releases-pypi --config index.yml --out site
+ghr-pypi --config index.yml --out site
 ```
 
 Any wheel or sdist attached to any (non-draft) release on any configured
@@ -146,7 +146,7 @@ resulting site can be served behind whatever auth your host provides
 repo's assets would not be fetchable by pip.
 
 ```sh
-github-releases-pypi yourorg/private-repo --out site --token $TOKEN --mirror
+ghr-pypi yourorg/private-repo --out site --token $TOKEN --mirror
 ```
 
 When the mirrored site will be hosted somewhere other than GitHub Pages,
@@ -252,7 +252,7 @@ Two tiny packages live in [`packages/`](packages/):
 Install them from this repo's Pages index:
 
 ```sh
-pip install --index-url https://bckohan.github.io/github-releases-pypi/simple/ github-releases-pypi-demo-app
+pip install --index-url https://bckohan.github.io/ghr-pypi/simple/ ghr-pypi-demo-app
 demo-app
 # Hello, world! (served from GitHub Pages)
 ```
@@ -279,7 +279,7 @@ just release
 - Release assets on public repos are public; this is not a private index.
 - The GitHub API returns at most 100 releases per page and the tool reads
   one page.
-- This repo's own index also lists `github-releases-pypi` itself: the PyPI
+- This repo's own index also lists `ghr-pypi` itself: the PyPI
   release workflow attaches the tool's wheels to GitHub Releases, and the
   index builder indexes every non-draft release — deliberate dogfooding.
 

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from github_releases_pypi.config import Config, ConfigError, load
+from ghr_pypi.config import Config, ConfigError, load
 
 
 def write(tmp_path: Path, text: str) -> Path:
@@ -18,7 +18,7 @@ def test_load_full(tmp_path):
             tmp_path,
             """
 repositories:
-  - bckohan/github-releases-pypi
+  - bckohan/ghr-pypi
   - someorg/other-project
 templates: ./tpl
 title: My Package Index
@@ -27,7 +27,7 @@ url: https://example.github.io/idx/
         )
     )
     assert cfg == Config(
-        repositories=("bckohan/github-releases-pypi", "someorg/other-project"),
+        repositories=("bckohan/ghr-pypi", "someorg/other-project"),
         templates=(tmp_path / "tpl").resolve(),
         title="My Package Index",
         url="https://example.github.io/idx/",

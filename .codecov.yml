@@ -1,3 +1,3 @@
 coverage:
   fixes:
-    - "__init__.py::github_releases_pypi/__init__.py"
+    - "__init__.py::ghr_pypi/__init__.py"

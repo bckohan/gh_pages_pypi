@@ -18,9 +18,9 @@ new plans and specs there rather than in `docs/` or `doc/`.
 
 ## What This Repo Is
 
-**github-releases-pypi** — Serve a PyPI-compatible package index from GitHub Pages, built from GitHub release assets.
+**ghr-pypi** — Serve a PyPI-compatible package index from GitHub Pages, built from GitHub release assets.
 
-A Python library. Source lives in `src/github_releases_pypi/`. Tests are in `tests/`. Documentation is in `doc/`.
+A Python library. Source lives in `src/ghr_pypi/`. Tests are in `tests/`. Documentation is in `doc/`.
 
 ## Tooling
 
@@ -67,7 +67,7 @@ just check-docs   # lint docs with doc8
 ```bash
 just release      # CalVer-stamp all packages, commit, sign tag vYYYY.M.D[.N], push to main
 ```
-One tag ships everything: github-releases-pypi to TestPyPI/PyPI plus a single
+One tag ships everything: ghr-pypi to TestPyPI/PyPI plus a single
 GitHub Release containing all three packages' dists, which the Pages index
 serves.
 
@@ -80,7 +80,7 @@ newest Python on Windows and macOS. Lower dependency bounds are tested with
 ## Project Structure
 
 ```
-src/github_releases_pypi/   # library source
+src/ghr_pypi/   # library source
 tests/                               # pytest test suite
 doc/source/                          # Sphinx documentation source
 ```
