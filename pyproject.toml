@@ -1,6 +1,6 @@
 [project]
 name = "github-releases-pypi"
-version = "2026.8.6"
+version = "2026.8.6.1"
 description = "Serve a PyPI-compatible package index from GitHub Pages, built from GitHub release assets."
 requires-python = ">=3.10,<4.0"
 authors = [

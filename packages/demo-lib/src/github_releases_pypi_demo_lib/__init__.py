@@ -1,6 +1,6 @@
 """Tiny greeting library for the GitHub Pages PyPI demo."""
 
-__version__ = "2026.8.6"
+__version__ = "2026.8.6.1"
 
 
 def greeting(name):
