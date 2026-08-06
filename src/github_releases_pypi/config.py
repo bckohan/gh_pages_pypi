@@ -2,10 +2,13 @@
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal, cast
 
 import yaml
 
-_KNOWN_KEYS = {"repositories", "templates", "title", "url"}
+MissingDigest = Literal["download", "no-fragment", "omit"]
+
+_KNOWN_KEYS = {"repositories", "templates", "title", "url", "missing_digest"}
 
 
 class ConfigError(ValueError):
@@ -20,6 +23,7 @@ class Config:
     templates: Path | None = None
     title: str = "Package index"
     url: str | None = None
+    missing_digest: MissingDigest = "download"
 
 
 def load(path: Path) -> Config:
@@ -60,9 +64,16 @@ def load(path: Path) -> Config:
     title = raw.get("title", "Package index")
     if not isinstance(title, str):
         raise ConfigError(f"{path}: 'title' must be a string")
+    missing_digest = raw.get("missing_digest", "download")
+    if missing_digest not in ("download", "no-fragment", "omit"):
+        raise ConfigError(
+            f"{path}: 'missing_digest' must be one of "
+            f"download, no-fragment, omit, got {missing_digest!r}"
+        )
     return Config(
         repositories=tuple(repositories),
         templates=templates,
         title=title,
         url=url,
+        missing_digest=cast(MissingDigest, missing_digest),
     )

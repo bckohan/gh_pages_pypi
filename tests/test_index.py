@@ -177,3 +177,113 @@ def test_write_site_block_extension(tmp_path):
     landing = (tmp_path / "site" / "index.html").read_text()
     assert "<footer>custom footer</footer>" in landing
     assert "Available packages:" in landing  # built-in content block retained
+
+
+DIGEST_RELEASE = [
+    {
+        "tag_name": "v9.0.0",
+        "assets": [
+            {
+                "name": "digested-9.0.0-py3-none-any.whl",
+                "browser_download_url": "https://github.com/o/r/releases/download/v9.0.0/digested-9.0.0-py3-none-any.whl",
+                "digest": "sha256:feedbeef",
+            },
+            {
+                "name": "legacy-9.0.0-py3-none-any.whl",
+                "browser_download_url": "https://github.com/o/r/releases/download/v9.0.0/legacy-9.0.0-py3-none-any.whl",
+            },
+        ],
+    },
+]
+
+
+def never_hash(url):
+    raise AssertionError(f"hash_url called for {url}")
+
+
+def test_digest_used_without_download():
+    projects = index.collect_projects(
+        [DIGEST_RELEASE[0] | {"assets": DIGEST_RELEASE[0]["assets"][:1]}],
+        hash_url=never_hash,
+    )
+    assert projects["digested"][0]["sha256"] == "feedbeef"
+
+
+def test_non_sha256_digest_falls_back_to_download():
+    release = {
+        "tag_name": "v9.0.1",
+        "assets": [
+            {
+                "name": "oddhash-9.0.1-py3-none-any.whl",
+                "browser_download_url": "https://github.com/o/r/releases/download/v9.0.1/oddhash-9.0.1-py3-none-any.whl",
+                "digest": "blake2:abc123",
+            },
+        ],
+    }
+    projects = index.collect_projects([release], hash_url=fake_hash)
+    assert projects["oddhash"][0]["sha256"] == "cafef00d"
+
+
+def test_missing_digest_download_default():
+    projects = index.collect_projects(DIGEST_RELEASE, hash_url=fake_hash)
+    assert projects["legacy"][0]["sha256"] == "cafef00d"
+    assert projects["digested"][0]["sha256"] == "feedbeef"
+
+
+def test_missing_digest_no_fragment(tmp_path):
+    projects = index.collect_projects(
+        DIGEST_RELEASE, hash_url=never_hash, missing_digest="no-fragment"
+    )
+    assert projects["legacy"][0]["sha256"] is None
+    index.write_site(projects, tmp_path, title="T", index_url=None)
+    page = (tmp_path / "simple" / "legacy" / "index.html").read_text()
+    assert "#sha256=" not in page
+    assert "legacy-9.0.0-py3-none-any.whl</a>" in page
+    digested_page = (tmp_path / "simple" / "digested" / "index.html").read_text()
+    assert "#sha256=feedbeef" in digested_page
+
+
+def test_missing_digest_omit(capsys):
+    projects = index.collect_projects(
+        DIGEST_RELEASE, hash_url=never_hash, missing_digest="omit"
+    )
+    assert "legacy" not in projects
+    assert "digested" in projects
+    err = capsys.readouterr().err
+    assert "legacy-9.0.0-py3-none-any.whl has no digest, omitted" in err
+
+
+def test_null_digest_treated_as_absent():
+    # GitHub's API returns "digest": null for legacy assets — pin that wire
+    # shape: an explicit None behaves exactly like a missing key.
+    release = {
+        "tag_name": "v9.0.3",
+        "assets": [
+            {
+                "name": "nulldigest-9.0.3-py3-none-any.whl",
+                "browser_download_url": "https://github.com/o/r/releases/download/v9.0.3/nulldigest-9.0.3-py3-none-any.whl",
+                "digest": None,
+            },
+        ],
+    }
+    projects = index.collect_projects([release], hash_url=fake_hash)
+    assert projects["nulldigest"][0]["sha256"] == "cafef00d"
+
+
+def test_empty_sha256_digest_treated_as_absent(capsys):
+    release = {
+        "tag_name": "v9.0.2",
+        "assets": [
+            {
+                "name": "emptyhash-9.0.2-py3-none-any.whl",
+                "browser_download_url": "https://github.com/o/r/releases/download/v9.0.2/emptyhash-9.0.2-py3-none-any.whl",
+                "digest": "sha256:",
+            },
+        ],
+    }
+    projects = index.collect_projects(
+        [release], hash_url=never_hash, missing_digest="omit"
+    )
+    assert "emptyhash" not in projects
+    err = capsys.readouterr().err
+    assert "emptyhash-9.0.2-py3-none-any.whl has no digest, omitted" in err

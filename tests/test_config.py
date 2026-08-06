@@ -76,11 +76,29 @@ def test_templates_relative_to_config_dir(tmp_path, monkeypatch):
         ("repositories: [a/b]\nurl: true\n", "'url' must be a string"),
         ("repositories: [a/b]\ntitle: [not, a, string]\n", "'title' must be a string"),
         ("repositories: [a/b]\nurl: [::bad yaml::\n", "invalid YAML"),
+        (
+            "repositories: [a/b]\nmissing_digest: always\n",
+            "must be one of download, no-fragment, omit",
+        ),
+        (
+            "repositories: [a/b]\nmissing_digest: true\n",
+            "'missing_digest' must be one of",
+        ),
     ],
 )
 def test_load_errors(tmp_path, text, match):
     with pytest.raises(ConfigError, match=match):
         load(write(tmp_path, text))
+
+
+@pytest.mark.parametrize("value", ["download", "no-fragment", "omit"])
+def test_missing_digest_values(tmp_path, value):
+    cfg = load(write(tmp_path, f"repositories: [a/b]\nmissing_digest: {value}\n"))
+    assert cfg.missing_digest == value
+
+
+def test_missing_digest_default(tmp_path):
+    assert load(write(tmp_path, "repositories: [a/b]\n")).missing_digest == "download"
 
 
 def test_load_missing_file(tmp_path):

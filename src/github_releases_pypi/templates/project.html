@@ -6,7 +6,7 @@
   </head>
   <body>
     {% block header %}<h1>Links for {{ project }}</h1>{% endblock %}
-{% block content %}{% for file in files %}    <a href="{{ file.url }}#sha256={{ file.sha256 }}">{{ file.filename }}</a><br/>
+{% block content %}{% for file in files %}    <a href="{{ file.url }}{% if file.sha256 %}#sha256={{ file.sha256 }}{% endif %}">{{ file.filename }}</a><br/>
 {% endfor %}{% endblock %}    {% block footer %}{% endblock %}
   </body>
 </html>

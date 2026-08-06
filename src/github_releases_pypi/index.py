@@ -2,8 +2,8 @@
 
 Lists every release in a GitHub repository, collects the ``.whl`` and
 ``.tar.gz`` assets, and writes a static PyPI-compatible index that GitHub
-Pages can serve. Links point at the release assets' download URLs and carry
-``#sha256=`` fragments so pip verifies every download.
+Pages can serve. Links point at the release assets' download URLs and, when a
+hash is available, carry ``#sha256=`` fragments so pip verifies the download.
 """
 
 import hashlib
@@ -24,15 +24,20 @@ from jinja2 import (
     select_autoescape,
 )
 
+from github_releases_pypi.config import MissingDigest
+
 API_ROOT = "https://api.github.com"
 
 
 class FileEntry(TypedDict):
-    """A release asset file with download URL and hash."""
+    """A release asset file with download URL and hash.
+
+    ``sha256`` is the hash, or None when unavailable and the policy allows it.
+    """
 
     filename: str
     url: str
-    sha256: str
+    sha256: str | None
 
 
 Projects = dict[str, list[FileEntry]]
@@ -100,7 +105,9 @@ def hash_url(url: str) -> str:
 
 
 def collect_projects(
-    releases: list[dict[str, Any]], hash_url: Callable[[str], str] = hash_url
+    releases: list[dict[str, Any]],
+    hash_url: Callable[[str], str] = hash_url,
+    missing_digest: MissingDigest = "download",
 ) -> Projects:
     """Map normalized project names to their release files.
 
@@ -109,6 +116,10 @@ def collect_projects(
     ignored, as are draft releases (their assets aren't publicly
     downloadable). Duplicate filenames across releases are indexed once
     (first occurrence wins) with a stderr warning.
+
+    Assets carrying an API ``digest`` are never downloaded; ``missing_digest``
+    governs the rest: ``download`` (hash them), ``no-fragment`` (index without
+    a hash), ``omit`` (exclude with a warning).
     """
     projects: Projects = {}
     seen: set[str] = set()
@@ -127,11 +138,30 @@ def collect_projects(
                 )
                 continue
             seen.add(asset["name"])
+            digest = asset.get("digest")
+            sha256: str | None
+            if (
+                isinstance(digest, str)
+                and digest.startswith("sha256:")
+                and digest[len("sha256:") :]
+            ):
+                sha256 = digest[len("sha256:") :]
+            elif missing_digest == "no-fragment":
+                sha256 = None
+            elif missing_digest == "omit":
+                print(
+                    f"warning: {asset['name']} has no digest, omitted "
+                    "(missing_digest=omit)",
+                    file=sys.stderr,
+                )
+                continue
+            else:
+                sha256 = hash_url(asset["browser_download_url"])
             projects.setdefault(normalize(project), []).append(
                 {
                     "filename": asset["name"],
                     "url": asset["browser_download_url"],
-                    "sha256": hash_url(asset["browser_download_url"]),
+                    "sha256": sha256,
                 }
             )
     for files in projects.values():

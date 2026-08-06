@@ -1,0 +1,26 @@
+{
+  "planPath": ".agents/docs/superpowers/plans/2026-08-05-digest-policy.md",
+  "tasks": [
+    {
+      "id": 0,
+      "subject": "Task 1: config missing_digest key",
+      "status": "completed",
+      "description": "**Goal:** Config.missing_digest (default download), enum-validated.\n\n**Verify:** just test tests/test_config.py && just check-types\n\n```json:metadata\n{\"files\": [\"src/github_releases_pypi/config.py\", \"tests/test_config.py\"], \"verifyCommand\": \"just test tests/test_config.py && just check-types\", \"acceptanceCriteria\": [\"three values load\", \"default download\", \"invalid rejected\"]}\n```"
+    },
+    {
+      "id": 1,
+      "subject": "Task 2: digest-aware collect_projects + conditional fragment",
+      "status": "completed",
+      "blockedBy": [0],
+      "description": "**Goal:** digest-bearing assets never downloaded; policy for the rest; conditional #sha256= fragment.\n\n**Verify:** just test\n\n```json:metadata\n{\"files\": [\"src/github_releases_pypi/index.py\", \"src/github_releases_pypi/templates/project.html\", \"tests/test_index.py\"], \"verifyCommand\": \"just test\", \"acceptanceCriteria\": [\"digest used no download\", \"non-sha256 treated absent\", \"download default unchanged\", \"no-fragment bare link\", \"omit drops + warns\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 3: CLI wiring + docs + full gate",
+      "status": "completed",
+      "blockedBy": [1],
+      "description": "**Goal:** cfg.missing_digest wired through CLI; README + changelog; check-all green.\n\n**Verify:** just check-all\n\n```json:metadata\n{\"files\": [\"src/github_releases_pypi/cli.py\", \"tests/test_cli.py\", \"README.md\", \"doc/source/changelog.rst\"], \"verifyCommand\": \"just check-all\", \"acceptanceCriteria\": [\"policy flows to rendered page\", \"README documents key\", \"check-all green\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-08-05"
+}

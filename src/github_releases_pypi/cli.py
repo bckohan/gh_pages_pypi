@@ -69,7 +69,9 @@ def build(
         raise typer.Exit(1) from error
     try:
         # pass via module attribute so tests can monkeypatch index.hash_url
-        projects = index.collect_projects(releases, hash_url=index.hash_url)
+        projects = index.collect_projects(
+            releases, hash_url=index.hash_url, missing_digest=cfg.missing_digest
+        )
     except urllib.error.URLError as error:
         typer.echo(f"error: downloading a release asset failed: {error}", err=True)
         raise typer.Exit(1) from error

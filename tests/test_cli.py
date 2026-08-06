@@ -170,6 +170,34 @@ def test_cli_rejects_malformed_repo(tmp_path):
     assert "is not OWNER/NAME" in all_output(result)
 
 
+def test_cli_missing_digest_policy_flows_through(tmp_path, monkeypatch):
+    legacy_release = [
+        {
+            "tag_name": "v1.0.0",
+            "assets": [
+                {
+                    "name": "legacy-1.0.0-py3-none-any.whl",
+                    "browser_download_url": "https://github.com/a/b/releases/download/v1.0.0/legacy-1.0.0-py3-none-any.whl",
+                },
+            ],
+        },
+    ]
+    monkeypatch.setattr(index, "fetch_releases", lambda repo, token: legacy_release)
+
+    def never_hash(url):
+        raise AssertionError("hash_url called despite no-fragment policy")
+
+    monkeypatch.setattr(index, "hash_url", never_hash)
+    cfg = config_file(tmp_path, "repositories: [a/b]\nmissing_digest: no-fragment\n")
+    out = tmp_path / "site"
+    result = runner.invoke(
+        app, ["--config", str(cfg), "--out", str(out), "--token", "x"]
+    )
+    assert result.exit_code == 0, all_output(result)
+    page = (out / "simple" / "legacy" / "index.html").read_text()
+    assert "#sha256=" not in page
+
+
 def test_cli_reports_asset_download_failure(tmp_path, monkeypatch):
     import urllib.error
 

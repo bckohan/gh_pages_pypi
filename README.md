@@ -33,7 +33,8 @@ github-releases-pypi OWNER/REPO --out site [--token TOKEN]
 
 Reads every (non-draft) release of `OWNER/REPO` via the GitHub API
 (`--token` defaults to `$GITHUB_TOKEN`), collects the wheel/sdist assets,
-computes each file's `sha256`, and writes a static
+takes each file's `sha256` from the API's asset digest (downloading and
+hashing only files that lack one), and writes a static
 [PEP 503](https://peps.python.org/pep-0503/) index to `site/`:
 
 ```
@@ -85,6 +86,7 @@ title: yourorg package index            # optional
 url: https://yourorg.github.io/pypi/    # optional — enables the absolute
                                         # --extra-index-url example on the
                                         # landing page
+missing_digest: download                # optional — see below
 ```
 
 ```sh
@@ -94,6 +96,20 @@ github-releases-pypi --config index.yml --out site
 Any wheel or sdist attached to any (non-draft) release on any configured
 repository is included. If two repositories publish the same filename, the
 first repository in the list wins and a warning is printed.
+
+GitHub's API supplies a sha256 digest for release assets uploaded since
+mid-2025, which the builder uses directly — those files are never
+downloaded. `missing_digest` controls what happens to older assets that
+lack a digest:
+
+| value | behavior |
+| --- | --- |
+| `download` (default) | download and hash the file |
+| `no-fragment` | link it without a `#sha256=` fragment (pip skips integrity verification) |
+| `omit` | leave it out of the index, with a warning |
+
+Duplicate filenames are resolved before the policy applies, so if the first
+repository's copy lacks a digest, a later copy's digest is not consulted.
 
 ## Customizing templates
 
@@ -120,6 +136,11 @@ error.
 `landing.html` and `project.html` define blocks `title`, `head`, `header`,
 `content`, and `footer`. `simple_root.html` defines only `head` — its body is
 the PEP 503 anchor list that pip parses, so extend it with care.
+
+If you replace `project.html` wholesale, guard the hash fragment with
+`{% if file.sha256 %}` as the built-in does — with `missing_digest:
+no-fragment`, `file.sha256` can be `None`, and an unconditional
+`#sha256={{ file.sha256 }}` renders a link pip will refuse to verify.
 
 ## The live demo
 
