@@ -89,5 +89,6 @@ def build(
         title=cfg.title,
         index_url=index_url,
         templates_dir=cfg.templates,
+        formats=cfg.formats,
     )
     typer.echo(f"wrote index for {len(projects)} project(s) to {out}")

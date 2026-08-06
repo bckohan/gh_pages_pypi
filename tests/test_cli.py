@@ -198,6 +198,19 @@ def test_cli_missing_digest_policy_flows_through(tmp_path, monkeypatch):
     assert "#sha256=" not in page
 
 
+def test_cli_formats_json_only(tmp_path, monkeypatch):
+    monkeypatch.setattr(index, "fetch_releases", lambda repo, token: FIXTURE_RELEASES)
+    monkeypatch.setattr(index, "hash_url", lambda url: "cafef00d")
+    cfg = config_file(tmp_path, "repositories: [a/b]\nformats: [json]\n")
+    out = tmp_path / "site"
+    result = runner.invoke(
+        app, ["--config", str(cfg), "--out", str(out), "--token", "x"]
+    )
+    assert result.exit_code == 0, all_output(result)
+    assert (out / "simple" / "index.json").exists()
+    assert not list(out.rglob("*.html"))
+
+
 def test_cli_reports_asset_download_failure(tmp_path, monkeypatch):
     import urllib.error
 

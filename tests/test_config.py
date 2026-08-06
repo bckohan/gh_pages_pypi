@@ -84,6 +84,16 @@ def test_templates_relative_to_config_dir(tmp_path, monkeypatch):
             "repositories: [a/b]\nmissing_digest: true\n",
             "'missing_digest' must be one of",
         ),
+        ("repositories: [a/b]\nformats: []\n", "'formats' must be a non-empty list"),
+        ("repositories: [a/b]\nformats: html\n", "'formats' must be a non-empty list"),
+        (
+            "repositories: [a/b]\nformats: [xml]\n",
+            "'formats' entries must be html or json, got 'xml'",
+        ),
+        (
+            "repositories: [a/b]\nformats: [html, html]\n",
+            "'formats' contains duplicates",
+        ),
     ],
 )
 def test_load_errors(tmp_path, text, match):
@@ -99,6 +109,24 @@ def test_missing_digest_values(tmp_path, value):
 
 def test_missing_digest_default(tmp_path):
     assert load(write(tmp_path, "repositories: [a/b]\n")).missing_digest == "download"
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        ("[html]", ("html",)),
+        ("[json]", ("json",)),
+        ("[html, json]", ("html", "json")),
+        ("[json, html]", ("json", "html")),
+    ],
+)
+def test_formats_values(tmp_path, value, expected):
+    cfg = load(write(tmp_path, f"repositories: [a/b]\nformats: {value}\n"))
+    assert cfg.formats == expected
+
+
+def test_formats_default(tmp_path):
+    assert load(write(tmp_path, "repositories: [a/b]\n")).formats == ("html", "json")
 
 
 def test_load_missing_file(tmp_path):

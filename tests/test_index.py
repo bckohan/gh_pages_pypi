@@ -1,3 +1,5 @@
+import json
+
 from github_releases_pypi import index
 
 FIXTURE_RELEASES = [
@@ -287,3 +289,94 @@ def test_empty_sha256_digest_treated_as_absent(capsys):
     assert "emptyhash" not in projects
     err = capsys.readouterr().err
     assert "emptyhash-9.0.2-py3-none-any.whl has no digest, omitted" in err
+
+
+def test_version_from_filename():
+    assert index.version_from_filename("demo_lib-1.0.0-py3-none-any.whl") == "1.0.0"
+    assert index.version_from_filename("demo_lib-1.0.0.tar.gz") == "1.0.0"
+    assert index.version_from_filename("demo-lib-2.0rc1.tar.gz") == "2.0rc1"
+    assert index.version_from_filename("release-notes.txt") is None
+    assert index.version_from_filename("noversion.whl") is None
+    assert index.version_from_filename("noversion.tar.gz") is None
+    assert index.version_from_filename("foo-1.0-1-py3-none-any.whl") == "1.0"
+
+
+def test_collect_projects_captures_size_and_upload_time():
+    release = {
+        "tag_name": "v3.0.0",
+        "assets": [
+            {
+                "name": "sized-3.0.0-py3-none-any.whl",
+                "browser_download_url": "https://github.com/o/r/releases/download/v3.0.0/sized-3.0.0-py3-none-any.whl",
+                "digest": "sha256:beef",
+                "size": 4321,
+                "created_at": "2026-08-05T03:07:33Z",
+            },
+        ],
+    }
+    entry = index.collect_projects([release], hash_url=never_hash)["sized"][0]
+    assert entry["size"] == 4321
+    assert entry["upload_time"] == "2026-08-05T03:07:33Z"
+
+
+def test_collect_projects_defaults_size_and_upload_time():
+    entry = index.collect_projects(FIXTURE_RELEASES, hash_url=fake_hash)[
+        "github-releases-pypi-demo-lib"
+    ][0]
+    assert entry["size"] == 0
+    assert entry["upload_time"] is None
+
+
+def test_write_site_json_project_page(tmp_path):
+    projects = index.collect_projects(FIXTURE_RELEASES, hash_url=fake_hash)
+    index.write_site(projects, tmp_path, title="T", index_url=None)
+    data = json.loads(
+        (
+            tmp_path / "simple" / "github-releases-pypi-demo-lib" / "index.json"
+        ).read_text()
+    )
+    assert data["meta"] == {"api-version": "1.1"}
+    assert data["name"] == "github-releases-pypi-demo-lib"
+    assert data["versions"] == ["1.0.0"]
+    files = {f["filename"]: f for f in data["files"]}
+    whl = files["github_releases_pypi_demo_lib-1.0.0-py3-none-any.whl"]
+    assert whl["hashes"] == {"sha256": "cafef00d"}
+    assert whl["size"] == 0
+    assert "upload-time" not in whl
+
+
+def test_write_site_json_root(tmp_path):
+    projects = index.collect_projects(FIXTURE_RELEASES, hash_url=fake_hash)
+    index.write_site(projects, tmp_path, title="T", index_url=None)
+    data = json.loads((tmp_path / "simple" / "index.json").read_text())
+    assert data["meta"] == {"api-version": "1.1"}
+    assert {"name": "github-releases-pypi-demo-lib"} in data["projects"]
+    assert {"name": "github-releases-pypi-demo-app"} in data["projects"]
+
+
+def test_write_site_json_empty_hashes_and_upload_time(tmp_path):
+    projects = index.collect_projects(
+        DIGEST_RELEASE, hash_url=never_hash, missing_digest="no-fragment"
+    )
+    index.write_site(projects, tmp_path, title="T", index_url=None)
+    data = json.loads((tmp_path / "simple" / "legacy" / "index.json").read_text())
+    assert data["files"][0]["hashes"] == {}
+    assert "upload-time" not in data["files"][0]
+
+
+def test_write_site_formats_html_only(tmp_path):
+    projects = index.collect_projects(FIXTURE_RELEASES, hash_url=fake_hash)
+    index.write_site(projects, tmp_path, title="T", index_url=None, formats=("html",))
+    assert not list(tmp_path.rglob("*.json"))
+    assert (tmp_path / "index.html").exists()
+    assert (tmp_path / "simple" / "index.html").exists()
+
+
+def test_write_site_formats_json_only(tmp_path):
+    projects = index.collect_projects(FIXTURE_RELEASES, hash_url=fake_hash)
+    index.write_site(projects, tmp_path, title="T", index_url=None, formats=("json",))
+    assert not list(tmp_path.rglob("*.html"))
+    assert (tmp_path / "simple" / "index.json").exists()
+    assert (
+        tmp_path / "simple" / "github-releases-pypi-demo-lib" / "index.json"
+    ).exists()

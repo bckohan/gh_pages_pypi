@@ -1,0 +1,33 @@
+{
+  "planPath": ".agents/docs/superpowers/plans/2026-08-05-json-simple-api.md",
+  "tasks": [
+    {
+      "id": 0,
+      "subject": "Task 1: config formats key",
+      "status": "completed",
+      "description": "**Goal:** Config.formats tuple (Literal alias), validated, default (html, json).\n\n**Verify:** just test tests/test_config.py && just check-types\n\n```json:metadata\n{\"files\": [\"src/github_releases_pypi/config.py\", \"tests/test_config.py\"], \"verifyCommand\": \"just test tests/test_config.py && just check-types\", \"acceptanceCriteria\": [\"three shapes load\", \"default both\", \"invalid shapes rejected\"]}\n```"
+    },
+    {
+      "id": 1,
+      "subject": "Task 2: FileEntry size/upload_time + version_from_filename",
+      "status": "completed",
+      "blockedBy": [0],
+      "description": "**Goal:** size/created_at captured; version helper; packaging runtime dep.\n\n**Verify:** just test\n\n```json:metadata\n{\"files\": [\"src/github_releases_pypi/index.py\", \"pyproject.toml\", \"tests/test_index.py\"], \"verifyCommand\": \"just test\", \"acceptanceCriteria\": [\"size/upload_time captured with defaults\", \"version parsing correct\", \"existing tests unchanged\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 3: JSON emission + write_site formats",
+      "status": "completed",
+      "blockedBy": [1],
+      "description": "**Goal:** PEP 691/700 JSON tree per formats; landing only with html.\n\n**Verify:** just test\n\n```json:metadata\n{\"files\": [\"src/github_releases_pypi/index.py\", \"tests/test_index.py\"], \"verifyCommand\": \"just test\", \"acceptanceCriteria\": [\"project json correct\", \"root json correct\", \"formats matrix\", \"existing tests pass\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 4: CLI wiring + docs + full gate",
+      "status": "completed",
+      "blockedBy": [2],
+      "description": "**Goal:** cfg.formats wired; README JSON section; changelog; check-all green.\n\n**Verify:** just check-all\n\n```json:metadata\n{\"files\": [\"src/github_releases_pypi/cli.py\", \"tests/test_cli.py\", \"README.md\", \"doc/source/changelog.rst\"], \"verifyCommand\": \"just check-all\", \"acceptanceCriteria\": [\"json-only flows through CLI\", \"README documents formats\", \"check-all green\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-08-05"
+}

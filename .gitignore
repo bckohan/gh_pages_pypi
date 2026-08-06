@@ -221,3 +221,4 @@ __marimo__/
 doc/build/
 *.sarif
 requirements-test-*.txt
+direction.md

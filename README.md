@@ -11,7 +11,8 @@
 
 Serve a **PyPI-compatible package index from GitHub Pages**, built from
 **GitHub release assets**. No index server, nothing published to pypi.org —
-just static PEP 503 HTML, rebuilt automatically on every release.
+just static PEP 503 HTML and PEP 691 JSON, rebuilt automatically on every
+release.
 
 This repository is both the tool and its own demo: the index at
 [bckohan.github.io/github-releases-pypi](https://bckohan.github.io/github-releases-pypi/)
@@ -41,6 +42,7 @@ hashing only files that lack one), and writes a static
 site/index.html                   → human landing page
 site/simple/                      → lists every project
 site/simple/<project>/            → file links with #sha256= fragments
+site/simple/**/index.json         → PEP 691 JSON Simple API (see below)
 ```
 
 It refuses to build an empty index (non-zero exit) so a misconfigured CI run
@@ -87,6 +89,7 @@ url: https://yourorg.github.io/pypi/    # optional — enables the absolute
                                         # --extra-index-url example on the
                                         # landing page
 missing_digest: download                # optional — see below
+formats: [html, json]                   # optional — default: both
 ```
 
 ```sh
@@ -110,6 +113,22 @@ lack a digest:
 
 Duplicate filenames are resolved before the policy applies, so if the first
 repository's copy lacks a digest, a later copy's digest is not consulted.
+
+## JSON Simple API
+
+With `json` in `formats` (the default), the builder also writes a
+[PEP 691](https://peps.python.org/pep-0691/) JSON index — `simple/index.json`
+and `simple/<project>/index.json`, api-version 1.1 with
+[PEP 700](https://peps.python.org/pep-0700/) `versions`, `size`, and
+`upload-time` fields (uv's `--exclude-newer` uses `upload-time`).
+
+On a full webserver you can serve the JSON at the canonical URLs via
+`Accept`-header content negotiation (`application/vnd.pypi.simple.v1+json`);
+on static hosts the files sit alongside the HTML. The JSON shape is
+spec-defined and is NOT affected by template overrides.
+
+`formats: [json]` emits a JSON-only, headless index (no landing page);
+`formats: [html]` reproduces today's HTML-only output.
 
 ## Customizing templates
 

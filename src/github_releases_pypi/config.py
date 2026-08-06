@@ -8,7 +8,9 @@ import yaml
 
 MissingDigest = Literal["download", "no-fragment", "omit"]
 
-_KNOWN_KEYS = {"repositories", "templates", "title", "url", "missing_digest"}
+Formats = Literal["html", "json"]
+
+_KNOWN_KEYS = {"repositories", "templates", "title", "url", "missing_digest", "formats"}
 
 
 class ConfigError(ValueError):
@@ -24,6 +26,7 @@ class Config:
     title: str = "Package index"
     url: str | None = None
     missing_digest: MissingDigest = "download"
+    formats: tuple[Formats, ...] = ("html", "json")
 
 
 def load(path: Path) -> Config:
@@ -70,10 +73,22 @@ def load(path: Path) -> Config:
             f"{path}: 'missing_digest' must be one of "
             f"download, no-fragment, omit, got {missing_digest!r}"
         )
+    raw_formats = raw.get("formats", ["html", "json"])
+    if not isinstance(raw_formats, list) or not raw_formats:
+        raise ConfigError(f"{path}: 'formats' must be a non-empty list")
+    for fmt in raw_formats:
+        if fmt not in ("html", "json"):
+            raise ConfigError(
+                f"{path}: 'formats' entries must be html or json, got {fmt!r}"
+            )
+    if len(set(raw_formats)) != len(raw_formats):
+        raise ConfigError(f"{path}: 'formats' contains duplicates")
+    formats = cast(tuple[Formats, ...], tuple(raw_formats))
     return Config(
         repositories=tuple(repositories),
         templates=templates,
         title=title,
         url=url,
         missing_digest=cast(MissingDigest, missing_digest),
+        formats=formats,
     )
