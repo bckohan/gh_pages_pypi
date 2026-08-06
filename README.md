@@ -192,6 +192,23 @@ uv in particular resolves dramatically faster against large indexes.
 
       warning: yourorg/lib-one: 3 of 4 wheels have no .metadata asset; ...
 
+  To publish metadata assets from your release workflow, extract each
+  wheel's `METADATA` and upload it next to the wheel (see the
+  "Extract PEP 658 metadata from wheels" step in
+  [`release.yml`](.github/workflows/release.yml) for the full version):
+
+      - name: Extract PEP 658 metadata
+        run: |
+          python3 -c "
+          import pathlib, zipfile
+          for w in pathlib.Path('dist').glob('*.whl'):
+              m = [n for n in zipfile.ZipFile(w).namelist()
+                   if n.endswith('.dist-info/METADATA') and n.count('/') == 1]
+              w.with_name(w.name + '.metadata').write_bytes(
+                  zipfile.ZipFile(w).read(m[0]))
+          "
+      - run: gh release upload "$GITHUB_REF_NAME" dist/*.whl.metadata
+
 Set `metadata: false` to disable extraction, advertising, and warnings.
 If you replace `project.html` wholesale, copy the built-in's
 `data-core-metadata` handling to keep advertising metadata.

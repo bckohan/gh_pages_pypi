@@ -18,3 +18,5 @@ Changelog
 * Serve PEP 658/714 core metadata: extracted from mirrored wheels, passed
   through from ``.metadata`` release assets, with per-repository coverage
   warnings.
+* Release workflow publishes each wheel's PEP 658 ``.metadata`` as a
+  release asset.

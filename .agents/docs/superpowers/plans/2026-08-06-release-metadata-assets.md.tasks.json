@@ -1,0 +1,12 @@
+{
+  "planPath": ".agents/docs/superpowers/plans/2026-08-06-release-metadata-assets.md",
+  "tasks": [
+    {
+      "id": 0,
+      "subject": "Task 1: workflow extraction step + docs",
+      "status": "completed",
+      "description": "**Goal:** release.yml extracts+uploads wheel .metadata; README recipe; changelog.\n\n**Verify:** yaml parse + zizmor + local script check + just check-all\n\n```json:metadata\n{\"files\": [\".github/workflows/release.yml\", \"README.md\", \"doc/source/changelog.rst\"], \"verifyCommand\": \"just check-all\", \"acceptanceCriteria\": [\"step placed correctly\", \"unique-member rule\", \"local verification\", \"README recipe\", \"gate green\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-08-06"
+}
