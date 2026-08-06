@@ -91,6 +91,7 @@ url: https://yourorg.github.io/pypi/    # optional — enables the absolute
 missing_digest: download                # optional — see below
 formats: [html, json]                   # optional — default: both
 mirror: false                           # optional — see "Mirroring assets"
+metadata: true                          # optional — see "Dependency metadata"
 ```
 
 ```sh
@@ -170,8 +171,30 @@ assets. In GitHub Actions, persist them between runs:
     restore-keys: mirrored-assets-
 ```
 
-Note: files removed from releases are not pruned from `site/files/` —
-clear the directory (or the cache) to drop them.
+Note: files removed from releases (and their extracted `.metadata`
+siblings) are not pruned from `site/files/` — clear the directory (or the
+cache) to drop them.
+
+## Dependency metadata (PEP 658)
+
+Resolvers can read a wheel's dependencies without downloading the wheel
+when the index serves its core metadata
+([PEP 658](https://peps.python.org/pep-0658/)/[714](https://peps.python.org/pep-0714/)) —
+uv in particular resolves dramatically faster against large indexes.
+
+- **Mirror mode:** metadata is extracted from every mirrored wheel
+  automatically and served as `<filename>.metadata` beside it — no
+  configuration needed.
+- **Link mode:** the index can only advertise metadata files that live
+  next to the wheel's own URL, so they must be uploaded as release assets
+  named `<wheel-filename>.metadata`. The builder warns per repository when
+  wheels lack them:
+
+      warning: yourorg/lib-one: 3 of 4 wheels have no .metadata asset; ...
+
+Set `metadata: false` to disable extraction, advertising, and warnings.
+If you replace `project.html` wholesale, copy the built-in's
+`data-core-metadata` handling to keep advertising metadata.
 
 ## Customizing templates
 

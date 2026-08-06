@@ -1,0 +1,40 @@
+{
+  "planPath": ".agents/docs/superpowers/plans/2026-08-06-pep658-metadata.md",
+  "tasks": [
+    {
+      "id": 0,
+      "subject": "Task 1: config metadata key",
+      "status": "completed",
+      "description": "**Goal:** Config.metadata bool, default True.\n\n**Verify:** just test tests/test_config.py && just check-types\n\n```json:metadata\n{\"files\": [\"src/github_releases_pypi/config.py\", \"tests/test_config.py\"], \"verifyCommand\": \"just test tests/test_config.py && just check-types\", \"acceptanceCriteria\": [\"bool values + default True\", \"non-bool rejected\"]}\n```"
+    },
+    {
+      "id": 1,
+      "subject": "Task 2: pairing + source_repo",
+      "status": "completed",
+      "blockedBy": [0],
+      "description": "**Goal:** core_metadata/source_repo fields; .metadata pairing; _unsafe_name helper.\n\n**Verify:** just test\n\n```json:metadata\n{\"files\": [\"src/github_releases_pypi/index.py\", \"tests/test_index.py\"], \"verifyCommand\": \"just test\", \"acceptanceCriteria\": [\"digest/unhashed/absent pairing\", \"sdists excluded\", \"unsafe metadata not paired\", \"source_repo carried\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 3: emission + extract_metadata + coverage",
+      "status": "completed",
+      "blockedBy": [1],
+      "description": "**Goal:** both spellings in HTML/JSON; zipfile extraction; metadata_coverage.\n\n**Verify:** just test\n\n```json:metadata\n{\"files\": [\"src/github_releases_pypi/index.py\", \"src/github_releases_pypi/templates/project.html\", \"tests/test_index.py\"], \"verifyCommand\": \"just test\", \"acceptanceCriteria\": [\"attrs/keys only when known\", \"extraction + hash\", \"corrupt wheel warns\", \"coverage per repo\", \"no leaks\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 4: CLI wiring",
+      "status": "completed",
+      "blockedBy": [2],
+      "description": "**Goal:** tagging, gated extraction, per-repo warnings, metadata:false.\n\n**Verify:** just test && just check-types\n\n```json:metadata\n{\"files\": [\"src/github_releases_pypi/cli.py\", \"tests/test_cli.py\"], \"verifyCommand\": \"just test && just check-types\", \"acceptanceCriteria\": [\"releases tagged\", \"extraction gated\", \"per-repo warnings\", \"metadata:false silent\"]}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 5: docs + full gate",
+      "status": "completed",
+      "blockedBy": [3],
+      "description": "**Goal:** README section; changelog; check-all green.\n\n**Verify:** just check-all\n\n```json:metadata\n{\"files\": [\"README.md\", \"doc/source/changelog.rst\"], \"verifyCommand\": \"just check-all\", \"acceptanceCriteria\": [\"README covers both modes\", \"check-all green\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-08-06"
+}

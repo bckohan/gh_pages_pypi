@@ -15,3 +15,6 @@ Changelog
   the ``formats`` config key.
 * ``mirror`` mode: download assets into the site (private-repo support,
   self-contained output, incremental re-builds).
+* Serve PEP 658/714 core metadata: extracted from mirrored wheels, passed
+  through from ``.metadata`` release assets, with per-repository coverage
+  warnings.

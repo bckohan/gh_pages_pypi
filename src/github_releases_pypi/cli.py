@@ -77,7 +77,11 @@ def build(
     releases = []
     try:
         for current in cfg.repositories:
-            releases.extend(index.fetch_releases(current, token))
+            fetched = index.fetch_releases(current, token)
+            for release in fetched:
+                # fetched payloads are fresh json.load output; safe to tag in place
+                release["_source_repo"] = current
+            releases.extend(fetched)
     except urllib.error.URLError as error:
         typer.echo(f"error: GitHub API request for {current} failed: {error}", err=True)
         raise typer.Exit(1) from error
@@ -88,6 +92,7 @@ def build(
             hash_url=index.hash_url,
             missing_digest=cfg.missing_digest,
             defer_hash=cfg.mirror,
+            metadata=cfg.metadata,
         )
     except urllib.error.URLError as error:
         typer.echo(f"error: downloading a release asset failed: {error}", err=True)
@@ -108,6 +113,17 @@ def build(
         except urllib.error.URLError as error:
             typer.echo(f"error: downloading a release asset failed: {error}", err=True)
             raise typer.Exit(1) from error
+        if cfg.metadata:
+            index.extract_metadata(projects, out)
+    elif cfg.metadata:
+        for repo_name, (missing, total) in index.metadata_coverage(projects).items():
+            if missing:
+                typer.echo(
+                    f"warning: {repo_name}: {missing} of {total} wheels have no "
+                    ".metadata asset; resolvers must download full wheels for "
+                    "dependency metadata",
+                    err=True,
+                )
     index_url = cfg.url.rstrip("/") + "/simple/" if cfg.url else None
     index.write_site(
         projects,

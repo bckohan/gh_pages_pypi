@@ -96,6 +96,8 @@ def test_templates_relative_to_config_dir(tmp_path, monkeypatch):
         ),
         ("repositories: [a/b]\nmirror: maybe\n", "'mirror' must be true or false"),
         ("repositories: [a/b]\nmirror: 1\n", "'mirror' must be true or false"),
+        ("repositories: [a/b]\nmetadata: maybe\n", "'metadata' must be true or false"),
+        ("repositories: [a/b]\nmetadata: 1\n", "'metadata' must be true or false"),
         (
             "repositories: [a/b]\nmirror: true\nmissing_digest: download\n",
             "'missing_digest' has no effect when 'mirror' is enabled",
@@ -143,6 +145,16 @@ def test_mirror_values(tmp_path, value, expected):
 
 def test_mirror_default(tmp_path):
     assert load(write(tmp_path, "repositories: [a/b]\n")).mirror is False
+
+
+@pytest.mark.parametrize("value,expected", [("true", True), ("false", False)])
+def test_metadata_values(tmp_path, value, expected):
+    cfg = load(write(tmp_path, f"repositories: [a/b]\nmetadata: {value}\n"))
+    assert cfg.metadata is expected
+
+
+def test_metadata_default(tmp_path):
+    assert load(write(tmp_path, "repositories: [a/b]\n")).metadata is True
 
 
 def test_mirror_allows_missing_digest_when_off(tmp_path):

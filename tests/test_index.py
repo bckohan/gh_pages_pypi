@@ -1,6 +1,7 @@
 import hashlib
 import io
 import json
+import zipfile
 
 import pytest
 
@@ -628,6 +629,212 @@ def test_write_site_formats_html_only(tmp_path):
     assert not list(tmp_path.rglob("*.json"))
     assert (tmp_path / "index.html").exists()
     assert (tmp_path / "simple" / "index.html").exists()
+
+
+METADATA_RELEASE = [
+    {
+        "tag_name": "v8.0.0",
+        "_source_repo": "o/meta",
+        "assets": [
+            {
+                "name": "hasmeta-8.0.0-py3-none-any.whl",
+                "browser_download_url": "https://github.com/o/meta/releases/download/v8.0.0/hasmeta-8.0.0-py3-none-any.whl",
+                "digest": "sha256:aaaa",
+            },
+            {
+                "name": "hasmeta-8.0.0-py3-none-any.whl.metadata",
+                "browser_download_url": "https://github.com/o/meta/releases/download/v8.0.0/hasmeta-8.0.0-py3-none-any.whl.metadata",
+                "digest": "sha256:bbbb",
+            },
+            {
+                "name": "nudemeta-8.0.0-py3-none-any.whl",
+                "browser_download_url": "https://github.com/o/meta/releases/download/v8.0.0/nudemeta-8.0.0-py3-none-any.whl",
+                "digest": "sha256:cccc",
+            },
+            {
+                "name": "nudemeta-8.0.0-py3-none-any.whl.metadata",
+                "browser_download_url": "https://github.com/o/meta/releases/download/v8.0.0/nudemeta-8.0.0-py3-none-any.whl.metadata",
+            },
+            {
+                "name": "nometa-8.0.0-py3-none-any.whl",
+                "browser_download_url": "https://github.com/o/meta/releases/download/v8.0.0/nometa-8.0.0-py3-none-any.whl",
+                "digest": "sha256:dddd",
+            },
+            {
+                "name": "withmeta-8.0.0.tar.gz",
+                "browser_download_url": "https://github.com/o/meta/releases/download/v8.0.0/withmeta-8.0.0.tar.gz",
+                "digest": "sha256:eeee",
+            },
+            {
+                "name": "withmeta-8.0.0.tar.gz.metadata",
+                "browser_download_url": "https://github.com/o/meta/releases/download/v8.0.0/withmeta-8.0.0.tar.gz.metadata",
+                "digest": "sha256:ffff",
+            },
+        ],
+    },
+]
+
+
+def test_collect_projects_pairs_metadata_assets():
+    projects = index.collect_projects(METADATA_RELEASE, hash_url=never_hash)
+    assert projects["hasmeta"][0]["core_metadata"] == "bbbb"
+    assert projects["nudemeta"][0]["core_metadata"] is True
+    assert projects["nometa"][0]["core_metadata"] is False
+    assert projects["withmeta"][0]["core_metadata"] is False  # sdists excluded
+
+
+def test_collect_projects_source_repo():
+    projects = index.collect_projects(METADATA_RELEASE, hash_url=never_hash)
+    assert projects["hasmeta"][0]["source_repo"] == "o/meta"
+    untagged = index.collect_projects(FIXTURE_RELEASES, hash_url=fake_hash)
+    assert untagged["github-releases-pypi-demo-lib"][0]["source_repo"] == ""
+
+
+def test_collect_projects_metadata_disabled():
+    projects = index.collect_projects(
+        METADATA_RELEASE, hash_url=never_hash, metadata=False
+    )
+    # even the digest-bearing pair is ignored — nothing is advertised
+    assert projects["hasmeta"][0]["core_metadata"] is False
+    assert all(
+        entry["core_metadata"] is False
+        for files in projects.values()
+        for entry in files
+    )
+
+
+def test_collect_projects_unsafe_metadata_asset_not_paired(capsys):
+    release = {
+        "tag_name": "v8.0.1",
+        "assets": [
+            {
+                "name": "victim-8.0.1-py3-none-any.whl",
+                "browser_download_url": "https://github.com/o/r/releases/download/v8.0.1/victim-8.0.1-py3-none-any.whl",
+                "digest": "sha256:aaaa",
+            },
+            {
+                "name": "../victim-8.0.1-py3-none-any.whl.metadata",
+                "browser_download_url": "https://github.com/o/r/releases/download/v8.0.1/evil",
+                "digest": "sha256:bbbb",
+            },
+        ],
+    }
+    projects = index.collect_projects([release], hash_url=never_hash)
+    assert projects["victim"][0]["core_metadata"] is False
+
+
+def build_wheel_bytes(
+    metadata: bytes = b"Metadata-Version: 2.1\nName: mirrored\nVersion: 7.0.0\n",
+) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("mirrored/__init__.py", "")
+        archive.writestr("mirrored-7.0.0.dist-info/METADATA", metadata)
+        archive.writestr("mirrored-7.0.0.dist-info/WHEEL", "Wheel-Version: 1.0\n")
+    return buffer.getvalue()
+
+
+def test_extract_metadata(tmp_path):
+    wheel_bytes = build_wheel_bytes()
+    projects = mirror_projects()
+    index.mirror_files(
+        projects, tmp_path, "tok", opener=make_opener(payload=wheel_bytes)
+    )
+    index.extract_metadata(projects, tmp_path)
+    entry = projects["mirrored"][0]
+    meta_path = (
+        tmp_path / "files" / "mirrored" / "mirrored-7.0.0-py3-none-any.whl.metadata"
+    )
+    assert meta_path.read_bytes() == build_wheel_bytes.__defaults__[0]
+    assert (
+        entry["core_metadata"]
+        == hashlib.sha256(build_wheel_bytes.__defaults__[0]).hexdigest()
+    )
+
+    index.write_site(projects, tmp_path, title="T", index_url=None)
+    page = (tmp_path / "simple" / "mirrored" / "index.html").read_text()
+    expected = f"sha256={entry['core_metadata']}"
+    assert f'data-core-metadata="{expected}"' in page
+    assert f'data-dist-info-metadata="{expected}"' in page
+    data = json.loads((tmp_path / "simple" / "mirrored" / "index.json").read_text())
+    assert data["files"][0]["core-metadata"] == {"sha256": entry["core_metadata"]}
+    assert data["files"][0]["dist-info-metadata"] == {"sha256": entry["core_metadata"]}
+    assert "core_metadata" not in data["files"][0]
+    assert "source_repo" not in data["files"][0]
+
+
+def test_extract_metadata_corrupt_wheel(tmp_path, capsys):
+    projects = mirror_projects()
+    index.mirror_files(
+        projects, tmp_path, "tok", opener=make_opener(payload=b"not-a-zip")
+    )
+    index.extract_metadata(projects, tmp_path)
+    assert projects["mirrored"][0]["core_metadata"] is False
+    assert "cannot extract metadata" in capsys.readouterr().err
+    assert not (
+        tmp_path / "files" / "mirrored" / "mirrored-7.0.0-py3-none-any.whl.metadata"
+    ).exists()
+
+
+def build_ambiguous_wheel_bytes() -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("mirrored-7.0.0.dist-info/METADATA", b"one")
+        archive.writestr("intruder-1.0.dist-info/METADATA", b"two")
+    return buffer.getvalue()
+
+
+@pytest.mark.parametrize(
+    "payload,paired,error",
+    [
+        pytest.param(
+            build_ambiguous_wheel_bytes(),
+            False,
+            ": no unique .dist-info/METADATA member",
+            id="ambiguous-dist-info",
+        ),
+        pytest.param(
+            b"not-a-zip",
+            True,
+            "cannot extract metadata",
+            id="paired-but-corrupt",
+        ),
+    ],
+)
+def test_extract_metadata_failure_ladder(tmp_path, capsys, payload, paired, error):
+    projects = mirror_projects()
+    if paired:
+        # link-mode pairing already recorded a hash from a release .metadata
+        # asset — a failed extraction must reset it, not leave a stale claim
+        projects["mirrored"][0]["core_metadata"] = "feedface"
+    index.mirror_files(projects, tmp_path, "tok", opener=make_opener(payload=payload))
+    index.extract_metadata(projects, tmp_path)
+    assert projects["mirrored"][0]["core_metadata"] is False
+    err = capsys.readouterr().err
+    assert "cannot extract metadata" in err
+    assert error in err
+    assert not (
+        tmp_path / "files" / "mirrored" / "mirrored-7.0.0-py3-none-any.whl.metadata"
+    ).exists()
+
+
+def test_metadata_true_renders_boolean(tmp_path):
+    projects = index.collect_projects(METADATA_RELEASE, hash_url=never_hash)
+    index.write_site(projects, tmp_path, title="T", index_url=None)
+    page = (tmp_path / "simple" / "nudemeta" / "index.html").read_text()
+    assert 'data-core-metadata="true"' in page
+    data = json.loads((tmp_path / "simple" / "nudemeta" / "index.json").read_text())
+    assert data["files"][0]["core-metadata"] is True
+    nometa_page = (tmp_path / "simple" / "nometa" / "index.html").read_text()
+    assert "data-core-metadata" not in nometa_page
+
+
+def test_metadata_coverage():
+    tagged = [dict(release, _source_repo="o/one") for release in FIXTURE_RELEASES]
+    projects = index.collect_projects(tagged + METADATA_RELEASE, hash_url=fake_hash)
+    coverage = index.metadata_coverage(projects)
+    assert coverage["o/meta"] == (1, 3)  # nometa lacks metadata; 3 wheels total
+    assert coverage["o/one"] == (2, 2)  # both fixture wheels lack metadata
 
 
 def test_write_site_formats_json_only(tmp_path):

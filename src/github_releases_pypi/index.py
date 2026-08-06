@@ -11,6 +11,7 @@ import json
 import re
 import sys
 import urllib.request
+import zipfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, TypedDict
@@ -37,7 +38,9 @@ class FileEntry(TypedDict):
     ``size`` comes from the GitHub asset API, 0 when unknown. ``upload_time``
     is the asset's RFC 3339 ``created_at``, None when unknown. ``api_url`` is
     the asset's API endpoint, used for authenticated mirror downloads; not
-    emitted.
+    emitted. ``core_metadata`` is the PEP 658 core metadata: its sha256, True
+    when available unhashed, False when absent. ``source_repo`` is the
+    OWNER/NAME the entry came from, for diagnostics; not emitted.
     """
 
     filename: str
@@ -46,6 +49,8 @@ class FileEntry(TypedDict):
     size: int
     upload_time: str | None
     api_url: str
+    core_metadata: str | bool
+    source_repo: str
 
 
 Projects = dict[str, list[FileEntry]]
@@ -124,19 +129,37 @@ def hash_url(url: str) -> str:
     return digest.hexdigest()
 
 
+def _unsafe_name(name: str) -> bool:
+    return "/" in name or "\\" in name or ":" in name or name.startswith(".")
+
+
+def _sha256_digest(asset: dict[str, Any]) -> str | None:
+    """Return the asset's sha256 from its API digest, or None."""
+    digest = asset.get("digest")
+    if isinstance(digest, str) and digest.startswith("sha256:"):
+        return digest[len("sha256:") :] or None
+    return None
+
+
 def collect_projects(
     releases: list[dict[str, Any]],
     hash_url: Callable[[str], str] = hash_url,
     missing_digest: MissingDigest = "download",
     defer_hash: bool = False,
+    metadata: bool = True,
 ) -> Projects:
     """Map normalized project names to their release files.
 
-    Returns ``{project: [{"filename", "url", "sha256"}, ...]}`` sorted by
-    project name and filename. Assets that are not wheels or sdists are
+    Returns ``{project: [entry, ...]}`` sorted by project name and filename;
+    each entry carries ``filename``, ``url``, ``sha256``, ``size``,
+    ``upload_time``, ``api_url``, ``core_metadata``, and ``source_repo``
+    (see :class:`FileEntry`). Assets that are not wheels or sdists are
     ignored, as are draft releases (their assets aren't publicly
     downloadable). Duplicate filenames across releases are indexed once
     (first occurrence wins) with a stderr warning.
+
+    With ``metadata`` False, ``.metadata`` assets are never paired and every
+    entry's ``core_metadata`` is False — nothing is advertised.
 
     Assets carrying an API ``digest`` are never downloaded; ``missing_digest``
     governs the rest: ``download`` (hash them), ``no-fragment`` (index without
@@ -149,9 +172,19 @@ def collect_projects(
     for release in releases:
         if release.get("draft"):
             continue
+        source_repo = release.get("_source_repo", "")
+        # pair .metadata assets per release — the pair must live at
+        # <wheel-url>.metadata, so cross-release pairing would advertise 404s
+        metadata_assets: dict[str, str | None] = {}
+        if metadata:
+            for asset in release.get("assets", []):
+                name = asset["name"]
+                if not name.endswith(".metadata") or _unsafe_name(name):
+                    continue
+                metadata_assets[name[: -len(".metadata")]] = _sha256_digest(asset)
         for asset in release.get("assets", []):
             name = asset["name"]
-            if "/" in name or "\\" in name or ":" in name or name.startswith("."):
+            if _unsafe_name(name):
                 print(
                     f"warning: skipping asset with unsafe name {name!r}",
                     file=sys.stderr,
@@ -168,26 +201,19 @@ def collect_projects(
                 )
                 continue
             seen.add(name)
-            digest = asset.get("digest")
-            sha256: str | None
-            if (
-                isinstance(digest, str)
-                and digest.startswith("sha256:")
-                and digest[len("sha256:") :]
-            ):
-                sha256 = digest[len("sha256:") :]
-            elif (
-                defer_hash or missing_digest == "no-fragment"
-            ):  # defer_hash short-circuits all policy branches; mirroring hashes downloaded bytes
-                sha256 = None
-            elif missing_digest == "omit":
-                print(
-                    f"warning: {name} has no digest, omitted (missing_digest=omit)",
-                    file=sys.stderr,
-                )
-                continue
-            else:
+            sha256 = _sha256_digest(asset)  # API digest wins; never download
+            if sha256 is None and not (defer_hash or missing_digest == "no-fragment"):
+                # defer_hash short-circuits policy; mirroring hashes downloaded bytes
+                if missing_digest == "omit":
+                    print(
+                        f"warning: {name} has no digest, omitted (missing_digest=omit)",
+                        file=sys.stderr,
+                    )
+                    continue
                 sha256 = hash_url(asset["browser_download_url"])
+            core_metadata: str | bool = False
+            if name.endswith(".whl") and name in metadata_assets:
+                core_metadata = metadata_assets[name] or True
             projects.setdefault(normalize(project), []).append(
                 {
                     "filename": name,
@@ -196,6 +222,8 @@ def collect_projects(
                     "size": int(asset.get("size") or 0),
                     "upload_time": asset.get("created_at"),
                     "api_url": asset.get("url") or "",
+                    "core_metadata": core_metadata,
+                    "source_repo": source_repo,
                 }
             )
     for files in projects.values():
@@ -307,6 +335,57 @@ def mirror_files(
             entry["url"] = relative_url
 
 
+def extract_metadata(projects: Projects, out_dir: Path) -> None:
+    """Extract PEP 658 core metadata from mirrored wheels.
+
+    Reads ``*.dist-info/METADATA`` from each mirrored ``.whl``, writes it
+    beside the wheel as ``<filename>.metadata``, and records its sha256 on
+    the entry. Extraction failures warn and leave the entry without
+    metadata.
+    """
+    for project, files in projects.items():
+        for entry in files:
+            if not entry["filename"].endswith(".whl"):
+                continue
+            wheel = out_dir / "files" / project / entry["filename"]
+            try:
+                with zipfile.ZipFile(wheel) as archive:
+                    members = [
+                        member
+                        for member in archive.namelist()
+                        if member.endswith(".dist-info/METADATA")
+                        and member.count("/") == 1
+                    ]
+                    if len(members) != 1:
+                        raise zipfile.BadZipFile("no unique .dist-info/METADATA member")
+                    payload = archive.read(members[0])
+            except (OSError, zipfile.BadZipFile) as error:
+                print(
+                    f"warning: cannot extract metadata from "
+                    f"{entry['filename']}: {error}",
+                    file=sys.stderr,
+                )
+                entry["core_metadata"] = False
+                continue
+            wheel.with_name(wheel.name + ".metadata").write_bytes(payload)
+            entry["core_metadata"] = hashlib.sha256(payload).hexdigest()
+
+
+def metadata_coverage(projects: Projects) -> dict[str, tuple[int, int]]:
+    """Per-source-repo ``(missing, total)`` counts of wheels lacking metadata."""
+    coverage: dict[str, tuple[int, int]] = {}
+    for files in projects.values():
+        for entry in files:
+            if not entry["filename"].endswith(".whl"):
+                continue
+            missing, total = coverage.get(entry["source_repo"], (0, 0))
+            coverage[entry["source_repo"]] = (
+                missing + (not entry["core_metadata"]),
+                total + 1,
+            )
+    return dict(sorted(coverage.items()))
+
+
 def pages_url(repo: str) -> str:
     """Return the GitHub Pages base URL for the ``owner/name`` repository."""
     owner, name = repo.split("/", 1)
@@ -336,6 +415,14 @@ def _json_project_page(project: str, files: list[FileEntry]) -> str:
         }
         if file["upload_time"]:
             entry["upload-time"] = file["upload_time"]
+        if file["core_metadata"]:
+            core: dict[str, str] | bool = (
+                {"sha256": file["core_metadata"]}
+                if isinstance(file["core_metadata"], str)
+                else True
+            )
+            entry["core-metadata"] = core
+            entry["dist-info-metadata"] = core
         entries.append(entry)
     return (
         json.dumps(

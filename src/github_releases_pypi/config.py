@@ -18,6 +18,7 @@ _KNOWN_KEYS = {
     "missing_digest",
     "formats",
     "mirror",
+    "metadata",
 }
 
 
@@ -36,6 +37,7 @@ class Config:
     missing_digest: MissingDigest = "download"
     formats: tuple[Formats, ...] = ("html", "json")
     mirror: bool = False
+    metadata: bool = True
 
 
 def load(path: Path) -> Config:
@@ -100,6 +102,9 @@ def load(path: Path) -> Config:
         raise ConfigError(
             f"{path}: 'missing_digest' has no effect when 'mirror' is enabled"
         )
+    metadata = raw.get("metadata", True)
+    if not isinstance(metadata, bool):
+        raise ConfigError(f"{path}: 'metadata' must be true or false")
     return Config(
         repositories=tuple(repositories),
         templates=templates,
@@ -108,4 +113,5 @@ def load(path: Path) -> Config:
         missing_digest=cast(MissingDigest, missing_digest),
         formats=formats,
         mirror=mirror,
+        metadata=metadata,
     )
