@@ -94,6 +94,12 @@ def test_templates_relative_to_config_dir(tmp_path, monkeypatch):
             "repositories: [a/b]\nformats: [html, html]\n",
             "'formats' contains duplicates",
         ),
+        ("repositories: [a/b]\nmirror: maybe\n", "'mirror' must be true or false"),
+        ("repositories: [a/b]\nmirror: 1\n", "'mirror' must be true or false"),
+        (
+            "repositories: [a/b]\nmirror: true\nmissing_digest: download\n",
+            "'missing_digest' has no effect when 'mirror' is enabled",
+        ),
     ],
 )
 def test_load_errors(tmp_path, text, match):
@@ -127,6 +133,23 @@ def test_formats_values(tmp_path, value, expected):
 
 def test_formats_default(tmp_path):
     assert load(write(tmp_path, "repositories: [a/b]\n")).formats == ("html", "json")
+
+
+@pytest.mark.parametrize("value,expected", [("true", True), ("false", False)])
+def test_mirror_values(tmp_path, value, expected):
+    cfg = load(write(tmp_path, f"repositories: [a/b]\nmirror: {value}\n"))
+    assert cfg.mirror is expected
+
+
+def test_mirror_default(tmp_path):
+    assert load(write(tmp_path, "repositories: [a/b]\n")).mirror is False
+
+
+def test_mirror_allows_missing_digest_when_off(tmp_path):
+    cfg = load(
+        write(tmp_path, "repositories: [a/b]\nmirror: false\nmissing_digest: omit\n")
+    )
+    assert cfg.mirror is False and cfg.missing_digest == "omit"
 
 
 def test_load_missing_file(tmp_path):

@@ -35,7 +35,9 @@ class FileEntry(TypedDict):
 
     ``sha256`` is the hash, or None when unavailable and the policy allows it.
     ``size`` comes from the GitHub asset API, 0 when unknown. ``upload_time``
-    is the asset's RFC 3339 ``created_at``, None when unknown.
+    is the asset's RFC 3339 ``created_at``, None when unknown. ``api_url`` is
+    the asset's API endpoint, used for authenticated mirror downloads; not
+    emitted.
     """
 
     filename: str
@@ -43,6 +45,7 @@ class FileEntry(TypedDict):
     sha256: str | None
     size: int
     upload_time: str | None
+    api_url: str
 
 
 Projects = dict[str, list[FileEntry]]
@@ -125,6 +128,7 @@ def collect_projects(
     releases: list[dict[str, Any]],
     hash_url: Callable[[str], str] = hash_url,
     missing_digest: MissingDigest = "download",
+    defer_hash: bool = False,
 ) -> Projects:
     """Map normalized project names to their release files.
 
@@ -136,7 +140,9 @@ def collect_projects(
 
     Assets carrying an API ``digest`` are never downloaded; ``missing_digest``
     governs the rest: ``download`` (hash them), ``no-fragment`` (index without
-    a hash), ``omit`` (exclude with a warning).
+    a hash), ``omit`` (exclude with a warning). With ``defer_hash`` no hashing
+    happens at all — sha256 is the API digest or None and ``missing_digest``
+    does not apply (mirroring computes hashes from the downloaded bytes).
     """
     projects: Projects = {}
     seen: set[str] = set()
@@ -144,17 +150,24 @@ def collect_projects(
         if release.get("draft"):
             continue
         for asset in release.get("assets", []):
-            project = project_name_from_filename(asset["name"])
+            name = asset["name"]
+            if "/" in name or "\\" in name or ":" in name or name.startswith("."):
+                print(
+                    f"warning: skipping asset with unsafe name {name!r}",
+                    file=sys.stderr,
+                )
+                continue
+            project = project_name_from_filename(name)
             if project is None:
                 continue
-            if asset["name"] in seen:
+            if name in seen:
                 print(
-                    f"warning: duplicate asset {asset['name']} ignored "
+                    f"warning: duplicate asset {name} ignored "
                     f"({asset['browser_download_url']})",
                     file=sys.stderr,
                 )
                 continue
-            seen.add(asset["name"])
+            seen.add(name)
             digest = asset.get("digest")
             sha256: str | None
             if (
@@ -163,12 +176,13 @@ def collect_projects(
                 and digest[len("sha256:") :]
             ):
                 sha256 = digest[len("sha256:") :]
-            elif missing_digest == "no-fragment":
+            elif (
+                defer_hash or missing_digest == "no-fragment"
+            ):  # defer_hash short-circuits all policy branches; mirroring hashes downloaded bytes
                 sha256 = None
             elif missing_digest == "omit":
                 print(
-                    f"warning: {asset['name']} has no digest, omitted "
-                    "(missing_digest=omit)",
+                    f"warning: {name} has no digest, omitted (missing_digest=omit)",
                     file=sys.stderr,
                 )
                 continue
@@ -176,16 +190,121 @@ def collect_projects(
                 sha256 = hash_url(asset["browser_download_url"])
             projects.setdefault(normalize(project), []).append(
                 {
-                    "filename": asset["name"],
+                    "filename": name,
                     "url": asset["browser_download_url"],
                     "sha256": sha256,
                     "size": int(asset.get("size") or 0),
                     "upload_time": asset.get("created_at"),
+                    "api_url": asset.get("url") or "",
                 }
             )
     for files in projects.values():
         files.sort(key=lambda file: file["filename"])
     return dict(sorted(projects.items()))
+
+
+class MirrorError(RuntimeError):
+    """Raised when mirroring an asset fails.
+
+    Covers unsafe paths, missing or non-https API URLs, truncated downloads,
+    and downloads that do not match their advertised digest.
+    """
+
+
+def _hash_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(65536), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def mirror_files(
+    projects: Projects,
+    out_dir: Path,
+    token: str,
+    *,
+    opener: Callable[..., Any] = urllib.request.urlopen,
+) -> None:
+    """Download every file into ``out_dir/files`` and relink entries.
+
+    Files already present with the expected sha256 are reused (when no
+    digest was advertised, the existing file's hash is adopted). Downloads
+    go through the asset's authenticated API endpoint, hash while
+    streaming into a ``.part`` file that replaces the destination only
+    after verification (Content-Length when present, then the advertised
+    digest) — a failure removes the partial file and leaves any previously
+    cached copy untouched, raising ``MirrorError``. Entry URLs are
+    rewritten to site-relative paths.
+    """
+    files_root = (out_dir / "files").resolve()
+    for project, files in projects.items():
+        project_dir = out_dir / "files" / project
+        for entry in files:
+            relative_url = f"../../files/{project}/{entry['filename']}"
+            dest = project_dir / entry["filename"]
+            if (
+                not dest.resolve().is_relative_to(files_root)
+                or dest.parent.resolve() != project_dir.resolve()
+            ):
+                raise MirrorError(f"{entry['filename']}: unsafe path")
+            if dest.is_file():
+                existing = _hash_file(dest)
+                if entry["sha256"] is None or existing == entry["sha256"]:
+                    entry["sha256"] = existing
+                    entry["url"] = relative_url
+                    continue
+            if not entry["api_url"]:
+                raise MirrorError(f"{entry['filename']}: asset has no API download URL")
+            if not entry["api_url"].startswith("https://"):
+                raise MirrorError(
+                    f"{entry['filename']}: refusing to fetch non-https URL: "
+                    f"{entry['api_url']!r}"
+                )
+            project_dir.mkdir(parents=True, exist_ok=True)
+            request = urllib.request.Request(
+                entry["api_url"],
+                headers={
+                    "Accept": "application/octet-stream",
+                    "Authorization": f"Bearer {token}",
+                },
+            )
+            digest = hashlib.sha256()
+            written = 0
+            tmp = dest.with_name(dest.name + ".part")
+            try:
+                with (
+                    opener(  # nosec B310 — scheme validated above
+                        request, timeout=30
+                    ) as response,
+                    tmp.open("wb") as sink,
+                ):
+                    for chunk in iter(lambda: response.read(65536), b""):
+                        digest.update(chunk)
+                        written += len(chunk)
+                        sink.write(chunk)
+                expected = getattr(response, "headers", {}).get("Content-Length")
+                try:
+                    expected_len = int(expected) if expected is not None else None
+                except ValueError:
+                    expected_len = None  # garbage Content-Length → treat as absent
+                if expected_len is not None and written != expected_len:
+                    raise MirrorError(
+                        f"{entry['filename']}: truncated download "
+                        f"({written} of {expected_len} bytes)"
+                    )
+                computed = digest.hexdigest()
+                if entry["sha256"] is not None and computed != entry["sha256"]:
+                    raise MirrorError(
+                        f"{entry['filename']}: downloaded sha256 {computed} does "
+                        f"not match advertised digest {entry['sha256']}"
+                    )
+            except BaseException:
+                tmp.unlink(missing_ok=True)
+                raise
+            tmp.replace(dest)
+            entry["sha256"] = computed
+            entry["url"] = relative_url
 
 
 def pages_url(repo: str) -> str:

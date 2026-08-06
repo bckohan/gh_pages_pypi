@@ -211,6 +211,93 @@ def test_cli_formats_json_only(tmp_path, monkeypatch):
     assert not list(out.rglob("*.html"))
 
 
+def test_cli_mirror_flag(tmp_path, monkeypatch):
+    monkeypatch.setattr(index, "fetch_releases", lambda repo, token: FIXTURE_RELEASES)
+    calls = []
+
+    def fake_mirror(projects, out_dir, token, **kwargs):
+        calls.append((out_dir, token))
+        for files in projects.values():
+            for entry in files:
+                entry["sha256"] = "cafef00d"
+                entry["url"] = f"../../files/x/{entry['filename']}"
+
+    monkeypatch.setattr(index, "mirror_files", fake_mirror)
+
+    def never_hash(url):
+        raise AssertionError("hash_url called despite mirror mode")
+
+    monkeypatch.setattr(index, "hash_url", never_hash)
+    out = tmp_path / "site"
+    result = runner.invoke(
+        app,
+        [
+            "bckohan/github-releases-pypi",
+            "--out",
+            str(out),
+            "--token",
+            "tok",
+            "--mirror",
+        ],
+    )
+    assert result.exit_code == 0, all_output(result)
+    assert calls == [(out, "tok")]
+    page = (out / "simple" / "github-releases-pypi-demo-lib" / "index.html").read_text()
+    assert "../../files/x/" in page
+
+
+def test_cli_mirror_with_config_errors(tmp_path):
+    cfg = config_file(tmp_path, "repositories: [a/b]\n")
+    result = runner.invoke(
+        app,
+        ["--config", str(cfg), "--out", str(tmp_path), "--token", "x", "--mirror"],
+    )
+    assert result.exit_code == 1
+    assert "with --config, set 'mirror' in the config file" in all_output(result)
+
+
+def test_cli_mirror_from_config(tmp_path, monkeypatch):
+    monkeypatch.setattr(index, "fetch_releases", lambda repo, token: FIXTURE_RELEASES)
+    calls = []
+
+    def fake_mirror(projects, out_dir, token, **kwargs):
+        calls.append(token)
+        for files in projects.values():
+            for entry in files:
+                entry["sha256"] = "cafef00d"
+                entry["url"] = f"../../files/x/{entry['filename']}"
+
+    monkeypatch.setattr(index, "mirror_files", fake_mirror)
+    cfg = config_file(tmp_path, "repositories: [a/b]\nmirror: true\n")
+    result = runner.invoke(
+        app, ["--config", str(cfg), "--out", str(tmp_path / "s"), "--token", "tok"]
+    )
+    assert result.exit_code == 0, all_output(result)
+    assert calls == ["tok"]
+
+
+def test_cli_mirror_error_surfaces(tmp_path, monkeypatch):
+    monkeypatch.setattr(index, "fetch_releases", lambda repo, token: FIXTURE_RELEASES)
+
+    def boom(projects, out_dir, token, **kwargs):
+        raise index.MirrorError("bad.whl: downloaded sha256 x does not match y")
+
+    monkeypatch.setattr(index, "mirror_files", boom)
+    result = runner.invoke(
+        app,
+        [
+            "bckohan/github-releases-pypi",
+            "--out",
+            str(tmp_path),
+            "--token",
+            "t",
+            "--mirror",
+        ],
+    )
+    assert result.exit_code == 1
+    assert "bad.whl" in all_output(result)
+
+
 def test_cli_reports_asset_download_failure(tmp_path, monkeypatch):
     import urllib.error
 
@@ -223,6 +310,30 @@ def test_cli_reports_asset_download_failure(tmp_path, monkeypatch):
     result = runner.invoke(
         app,
         ["bckohan/github-releases-pypi", "--out", str(tmp_path), "--token", "x"],
+    )
+    assert result.exit_code == 1
+    assert "downloading a release asset failed" in all_output(result)
+
+
+def test_cli_mirror_network_failure(tmp_path, monkeypatch):
+    import urllib.error
+
+    monkeypatch.setattr(index, "fetch_releases", lambda repo, token: FIXTURE_RELEASES)
+
+    def boom(projects, out_dir, token, **kwargs):
+        raise urllib.error.URLError("nope")
+
+    monkeypatch.setattr(index, "mirror_files", boom)
+    result = runner.invoke(
+        app,
+        [
+            "bckohan/github-releases-pypi",
+            "--out",
+            str(tmp_path),
+            "--token",
+            "t",
+            "--mirror",
+        ],
     )
     assert result.exit_code == 1
     assert "downloading a release asset failed" in all_output(result)

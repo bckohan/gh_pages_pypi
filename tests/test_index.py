@@ -1,4 +1,8 @@
+import hashlib
+import io
 import json
+
+import pytest
 
 from github_releases_pypi import index
 
@@ -106,6 +110,27 @@ def test_collect_projects_dedupes_duplicate_filenames(capsys):
         "duplicate asset github_releases_pypi_demo_lib-1.0.0-py3-none-any.whl"
         in capsys.readouterr().err
     )
+
+
+def test_collect_projects_skips_unsafe_asset_names(capsys):
+    release = {
+        "tag_name": "v6.6.6",
+        "assets": [
+            {
+                "name": "../../evil-1.0.0-py3-none-any.whl",
+                "browser_download_url": "https://github.com/o/r/releases/download/v6.6.6/a",
+            },
+            {
+                "name": "/abs/evil-1.0.0-py3-none-any.whl",
+                "browser_download_url": "https://github.com/o/r/releases/download/v6.6.6/b",
+            },
+        ],
+    }
+    projects = index.collect_projects([release], hash_url=never_hash)
+    assert projects == {}
+    err = capsys.readouterr().err
+    assert "unsafe name '../../evil-1.0.0-py3-none-any.whl'" in err
+    assert "unsafe name '/abs/evil-1.0.0-py3-none-any.whl'" in err
 
 
 def test_write_site(tmp_path):
@@ -291,6 +316,238 @@ def test_empty_sha256_digest_treated_as_absent(capsys):
     assert "emptyhash-9.0.2-py3-none-any.whl has no digest, omitted" in err
 
 
+def test_collect_projects_captures_api_url():
+    release = {
+        "tag_name": "v5.0.0",
+        "assets": [
+            {
+                "name": "apiurl-5.0.0-py3-none-any.whl",
+                "browser_download_url": "https://github.com/o/r/releases/download/v5.0.0/apiurl-5.0.0-py3-none-any.whl",
+                "url": "https://api.github.com/repos/o/r/releases/assets/123",
+                "digest": "sha256:beef",
+            },
+        ],
+    }
+    entry = index.collect_projects([release], hash_url=never_hash)["apiurl"][0]
+    assert entry["api_url"] == "https://api.github.com/repos/o/r/releases/assets/123"
+
+
+def test_collect_projects_api_url_defaults_to_empty():
+    release = {
+        "tag_name": "v5.0.1",
+        "assets": [
+            {
+                "name": "nourl-5.0.1-py3-none-any.whl",
+                "browser_download_url": "https://github.com/o/r/releases/download/v5.0.1/nourl-5.0.1-py3-none-any.whl",
+                "digest": "sha256:beef",
+            },
+        ],
+    }
+    entry = index.collect_projects([release], hash_url=never_hash)["nourl"][0]
+    assert entry["api_url"] == ""
+
+
+def test_collect_projects_defer_hash():
+    projects = index.collect_projects(
+        DIGEST_RELEASE, hash_url=never_hash, defer_hash=True
+    )
+    assert projects["digested"][0]["sha256"] == "feedbeef"
+    assert projects["legacy"][0]["sha256"] is None
+
+
+def test_collect_projects_defer_hash_ignores_policy():
+    projects = index.collect_projects(
+        DIGEST_RELEASE, hash_url=never_hash, defer_hash=True, missing_digest="omit"
+    )
+    assert "legacy" in projects  # omit does not apply under defer_hash
+
+
+def make_opener(payload=b"wheel-bytes", requests_log=None):
+    def opener(request, timeout=None):
+        if requests_log is not None:
+            requests_log.append(request)
+        return io.BytesIO(payload)
+
+    return opener
+
+
+MIRROR_RELEASE = [
+    {
+        "tag_name": "v7.0.0",
+        "assets": [
+            {
+                "name": "mirrored-7.0.0-py3-none-any.whl",
+                "browser_download_url": "https://github.com/o/r/releases/download/v7.0.0/mirrored-7.0.0-py3-none-any.whl",
+                "url": "https://api.github.com/repos/o/r/releases/assets/7",
+            },
+        ],
+    },
+]
+
+
+def mirror_projects():
+    return index.collect_projects(MIRROR_RELEASE, hash_url=never_hash, defer_hash=True)
+
+
+def test_mirror_files_downloads_and_relinks(tmp_path):
+    projects = mirror_projects()
+    log = []
+    index.mirror_files(projects, tmp_path, "tok", opener=make_opener(requests_log=log))
+    entry = projects["mirrored"][0]
+    dest = tmp_path / "files" / "mirrored" / "mirrored-7.0.0-py3-none-any.whl"
+    assert dest.read_bytes() == b"wheel-bytes"
+    assert entry["sha256"] == hashlib.sha256(b"wheel-bytes").hexdigest()
+    assert entry["url"] == "../../files/mirrored/mirrored-7.0.0-py3-none-any.whl"
+    assert len(log) == 1
+    assert log[0].get_full_url() == "https://api.github.com/repos/o/r/releases/assets/7"
+    assert log[0].get_header("Accept") == "application/octet-stream"
+    assert log[0].get_header("Authorization") == "Bearer tok"
+
+
+def test_mirror_files_reuses_matching_existing(tmp_path):
+    projects = mirror_projects()
+    dest = tmp_path / "files" / "mirrored" / "mirrored-7.0.0-py3-none-any.whl"
+    dest.parent.mkdir(parents=True)
+    dest.write_bytes(b"already-here")
+    projects["mirrored"][0]["sha256"] = hashlib.sha256(b"already-here").hexdigest()
+    log = []
+    index.mirror_files(projects, tmp_path, "tok", opener=make_opener(requests_log=log))
+    assert log == []  # no download
+    assert dest.read_bytes() == b"already-here"
+
+
+def test_mirror_files_adopts_existing_hash(tmp_path):
+    projects = mirror_projects()  # sha256 is None (no digest)
+    dest = tmp_path / "files" / "mirrored" / "mirrored-7.0.0-py3-none-any.whl"
+    dest.parent.mkdir(parents=True)
+    dest.write_bytes(b"already-here")
+    log = []
+    index.mirror_files(projects, tmp_path, "tok", opener=make_opener(requests_log=log))
+    assert log == []
+    assert (
+        projects["mirrored"][0]["sha256"] == hashlib.sha256(b"already-here").hexdigest()
+    )
+
+
+def test_mirror_files_redownloads_corrupted(tmp_path):
+    projects = mirror_projects()
+    dest = tmp_path / "files" / "mirrored" / "mirrored-7.0.0-py3-none-any.whl"
+    dest.parent.mkdir(parents=True)
+    dest.write_bytes(b"corrupted")
+    projects["mirrored"][0]["sha256"] = hashlib.sha256(b"wheel-bytes").hexdigest()
+    log = []
+    index.mirror_files(projects, tmp_path, "tok", opener=make_opener(requests_log=log))
+    assert len(log) == 1
+    assert dest.read_bytes() == b"wheel-bytes"
+
+
+def test_mirror_files_digest_mismatch(tmp_path):
+    projects = mirror_projects()
+    projects["mirrored"][0]["sha256"] = "deadbeef"  # advertised digest, wrong
+    with pytest.raises(index.MirrorError, match="mirrored-7.0.0-py3-none-any.whl"):
+        index.mirror_files(projects, tmp_path, "tok", opener=make_opener())
+    assert not (
+        tmp_path / "files" / "mirrored" / "mirrored-7.0.0-py3-none-any.whl"
+    ).exists()
+
+
+def test_mirror_files_rejects_non_https(tmp_path):
+    projects = mirror_projects()
+    projects["mirrored"][0]["api_url"] = "http://api.github.com/insecure"
+    with pytest.raises(index.MirrorError, match="non-https"):
+        index.mirror_files(projects, tmp_path, "tok", opener=make_opener())
+
+
+def test_mirror_files_missing_api_url(tmp_path):
+    projects = mirror_projects()
+    projects["mirrored"][0]["api_url"] = ""
+    with pytest.raises(index.MirrorError, match="no API download URL"):
+        index.mirror_files(projects, tmp_path, "tok", opener=make_opener())
+
+
+def test_mirror_files_rejects_unsafe_filename(tmp_path):
+    projects = mirror_projects()
+    projects["mirrored"][0]["filename"] = "../escape-1.0.0-py3-none-any.whl"
+    with pytest.raises(index.MirrorError, match="unsafe path"):
+        index.mirror_files(projects, tmp_path, "tok", opener=make_opener())
+
+
+def test_mirror_files_rejects_unsafe_project_key(tmp_path):
+    site = tmp_path / "site"
+    for hostile_key in ("../../esc", str(tmp_path / "abs-esc")):
+        projects = {hostile_key: [mirror_projects()["mirrored"][0]]}
+        with pytest.raises(index.MirrorError, match="unsafe path"):
+            index.mirror_files(projects, site, "tok", opener=make_opener())
+    # nothing was written anywhere — inside the site or beside it
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_mirror_files_midstream_failure_preserves_cache(tmp_path):
+    projects = mirror_projects()
+    dest = tmp_path / "files" / "mirrored" / "mirrored-7.0.0-py3-none-any.whl"
+    dest.parent.mkdir(parents=True)
+    dest.write_bytes(b"cached-good")
+    # expected hash matches neither the cache nor the stream → re-download
+    projects["mirrored"][0]["sha256"] = hashlib.sha256(b"wheel-bytes").hexdigest()
+
+    class ExplodingResponse:
+        def __init__(self):
+            self.calls = 0
+
+        def read(self, size):
+            self.calls += 1
+            if self.calls > 1:
+                raise OSError("connection reset")
+            return b"first-chunk"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    with pytest.raises(OSError, match="connection reset"):
+        index.mirror_files(
+            projects,
+            tmp_path,
+            "tok",
+            opener=lambda request, timeout=None: ExplodingResponse(),
+        )
+    assert dest.read_bytes() == b"cached-good"  # cached copy untouched
+    assert not dest.with_name(dest.name + ".part").exists()
+
+
+def test_mirror_files_truncated_download(tmp_path):
+    projects = mirror_projects()
+
+    class TruncatedResponse(io.BytesIO):
+        headers = {"Content-Length": "999"}
+
+    with pytest.raises(index.MirrorError, match="truncated"):
+        index.mirror_files(
+            projects,
+            tmp_path,
+            "tok",
+            opener=lambda request, timeout=None: TruncatedResponse(b"short"),
+        )
+    dest = tmp_path / "files" / "mirrored" / "mirrored-7.0.0-py3-none-any.whl"
+    assert not dest.exists()
+    assert not dest.with_name(dest.name + ".part").exists()
+
+
+def test_write_site_after_mirror(tmp_path):
+    projects = mirror_projects()
+    index.mirror_files(projects, tmp_path, "tok", opener=make_opener())
+    index.write_site(projects, tmp_path, title="T", index_url=None)
+    page = (tmp_path / "simple" / "mirrored" / "index.html").read_text()
+    assert 'href="../../files/mirrored/mirrored-7.0.0-py3-none-any.whl#sha256=' in page
+    data = json.loads((tmp_path / "simple" / "mirrored" / "index.json").read_text())
+    assert (
+        data["files"][0]["url"]
+        == "../../files/mirrored/mirrored-7.0.0-py3-none-any.whl"
+    )
+
+
 def test_version_from_filename():
     assert index.version_from_filename("demo_lib-1.0.0-py3-none-any.whl") == "1.0.0"
     assert index.version_from_filename("demo_lib-1.0.0.tar.gz") == "1.0.0"
@@ -343,6 +600,7 @@ def test_write_site_json_project_page(tmp_path):
     assert whl["hashes"] == {"sha256": "cafef00d"}
     assert whl["size"] == 0
     assert "upload-time" not in whl
+    assert "api_url" not in whl
 
 
 def test_write_site_json_root(tmp_path):

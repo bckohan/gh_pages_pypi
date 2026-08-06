@@ -35,6 +35,14 @@ def build(
         str | None,
         typer.Option(envvar="GITHUB_TOKEN", help="GitHub API token"),
     ] = None,
+    mirror: Annotated[
+        bool,
+        typer.Option(
+            "--mirror",
+            help="Download assets into the site instead of linking to GitHub "
+            "(with --config, set 'mirror' in the config file instead)",
+        ),
+    ] = False,
 ) -> None:
     """Build a PEP 503 package index from GitHub release assets."""
     if (repo is None) == (config is None):
@@ -44,6 +52,11 @@ def build(
         typer.echo("error: provide --token or set GITHUB_TOKEN", err=True)
         raise typer.Exit(1)
     if config is not None:
+        if mirror:
+            typer.echo(
+                "error: with --config, set 'mirror' in the config file", err=True
+            )
+            raise typer.Exit(1)
         try:
             cfg = load(config)
         except ConfigError as error:
@@ -59,6 +72,7 @@ def build(
             repositories=(repo,),
             title=f"{repo} package index",
             url=index.pages_url(repo),
+            mirror=mirror,
         )
     releases = []
     try:
@@ -70,7 +84,10 @@ def build(
     try:
         # pass via module attribute so tests can monkeypatch index.hash_url
         projects = index.collect_projects(
-            releases, hash_url=index.hash_url, missing_digest=cfg.missing_digest
+            releases,
+            hash_url=index.hash_url,
+            missing_digest=cfg.missing_digest,
+            defer_hash=cfg.mirror,
         )
     except urllib.error.URLError as error:
         typer.echo(f"error: downloading a release asset failed: {error}", err=True)
@@ -82,6 +99,15 @@ def build(
             err=True,
         )
         raise typer.Exit(1)
+    if cfg.mirror:
+        try:
+            index.mirror_files(projects, out, token)
+        except index.MirrorError as error:
+            typer.echo(f"error: {error}", err=True)
+            raise typer.Exit(1) from error
+        except urllib.error.URLError as error:
+            typer.echo(f"error: downloading a release asset failed: {error}", err=True)
+            raise typer.Exit(1) from error
     index_url = cfg.url.rstrip("/") + "/simple/" if cfg.url else None
     index.write_site(
         projects,

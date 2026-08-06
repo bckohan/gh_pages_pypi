@@ -13,3 +13,5 @@ Changelog
   config policy for digest-less assets.
 * Emit a PEP 691/700 JSON Simple API alongside the HTML index, controlled by
   the ``formats`` config key.
+* ``mirror`` mode: download assets into the site (private-repo support,
+  self-contained output, incremental re-builds).

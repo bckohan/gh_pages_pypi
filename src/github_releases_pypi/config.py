@@ -10,7 +10,15 @@ MissingDigest = Literal["download", "no-fragment", "omit"]
 
 Formats = Literal["html", "json"]
 
-_KNOWN_KEYS = {"repositories", "templates", "title", "url", "missing_digest", "formats"}
+_KNOWN_KEYS = {
+    "repositories",
+    "templates",
+    "title",
+    "url",
+    "missing_digest",
+    "formats",
+    "mirror",
+}
 
 
 class ConfigError(ValueError):
@@ -27,6 +35,7 @@ class Config:
     url: str | None = None
     missing_digest: MissingDigest = "download"
     formats: tuple[Formats, ...] = ("html", "json")
+    mirror: bool = False
 
 
 def load(path: Path) -> Config:
@@ -84,6 +93,13 @@ def load(path: Path) -> Config:
     if len(set(raw_formats)) != len(raw_formats):
         raise ConfigError(f"{path}: 'formats' contains duplicates")
     formats = cast(tuple[Formats, ...], tuple(raw_formats))
+    mirror = raw.get("mirror", False)
+    if not isinstance(mirror, bool):
+        raise ConfigError(f"{path}: 'mirror' must be true or false")
+    if mirror and "missing_digest" in raw:
+        raise ConfigError(
+            f"{path}: 'missing_digest' has no effect when 'mirror' is enabled"
+        )
     return Config(
         repositories=tuple(repositories),
         templates=templates,
@@ -91,4 +107,5 @@ def load(path: Path) -> Config:
         url=url,
         missing_digest=cast(MissingDigest, missing_digest),
         formats=formats,
+        mirror=mirror,
     )

@@ -90,6 +90,7 @@ url: https://yourorg.github.io/pypi/    # optional — enables the absolute
                                         # landing page
 missing_digest: download                # optional — see below
 formats: [html, json]                   # optional — default: both
+mirror: false                           # optional — see "Mirroring assets"
 ```
 
 ```sh
@@ -129,6 +130,48 @@ spec-defined and is NOT affected by template overrides.
 
 `formats: [json]` emits a JSON-only, headless index (no landing page);
 `formats: [html]` reproduces today's HTML-only output.
+
+## Mirroring assets
+
+With `mirror: true` (or `--mirror` on the single-repository form), the
+builder downloads every asset into `site/files/<project>/` and the index
+links to those local copies with relative URLs — the site is fully
+self-contained and relocatable, and GitHub is out of the serving path.
+
+This is also the way to index **private repositories**: downloads go
+through GitHub's authenticated asset API using your `--token`, and the
+resulting site can be served behind whatever auth your host provides
+(pip and uv understand basic auth and netrc). Direct links to a private
+repo's assets would not be fetchable by pip.
+
+```sh
+github-releases-pypi yourorg/private-repo --out site --token $TOKEN --mirror
+```
+
+When the mirrored site will be hosted somewhere other than GitHub Pages,
+prefer a config file with `mirror: true` and set `url` to the real host (or
+omit it) — the single-repository form assumes a Pages URL for the landing
+page's install example.
+
+Every mirrored file is hashed while downloading; when GitHub's API
+advertises a digest it is verified and a mismatch fails the build
+(downloads are staged to a temporary file, so a failed or interrupted
+build never corrupts previously mirrored files). The
+`missing_digest` option does not apply (and is rejected) under mirroring —
+every file gets a real hash. Files already present in `site/files/` with
+the right hash are not re-downloaded, so repeat builds only fetch new
+assets. In GitHub Actions, persist them between runs:
+
+```yaml
+- uses: actions/cache@v4
+  with:
+    path: site/files
+    key: mirrored-assets-${{ github.run_id }}
+    restore-keys: mirrored-assets-
+```
+
+Note: files removed from releases are not pruned from `site/files/` —
+clear the directory (or the cache) to drop them.
 
 ## Customizing templates
 

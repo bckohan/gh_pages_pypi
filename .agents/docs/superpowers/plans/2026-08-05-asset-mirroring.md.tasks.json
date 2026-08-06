@@ -1,0 +1,40 @@
+{
+  "planPath": ".agents/docs/superpowers/plans/2026-08-05-asset-mirroring.md",
+  "tasks": [
+    {
+      "id": 0,
+      "subject": "Task 1: config mirror key",
+      "status": "completed",
+      "description": "**Goal:** Config.mirror bool + missing_digest exclusivity.\n\n**Verify:** just test tests/test_config.py && just check-types\n\n```json:metadata\n{\"files\": [\"src/github_releases_pypi/config.py\", \"tests/test_config.py\"], \"verifyCommand\": \"just test tests/test_config.py && just check-types\", \"acceptanceCriteria\": [\"bool values + default\", \"non-bool rejected\", \"exclusivity enforced\"]}\n```"
+    },
+    {
+      "id": 1,
+      "subject": "Task 2: FileEntry api_url + defer_hash",
+      "status": "completed",
+      "blockedBy": [0],
+      "description": "**Goal:** api_url carried; defer_hash skips hashing/policy.\n\n**Verify:** just test\n\n```json:metadata\n{\"files\": [\"src/github_releases_pypi/index.py\", \"tests/test_index.py\"], \"verifyCommand\": \"just test\", \"acceptanceCriteria\": [\"api_url captured, never emitted\", \"defer_hash semantics\", \"existing tests unchanged\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 3: mirror_files",
+      "status": "completed",
+      "blockedBy": [1],
+      "description": "**Goal:** authenticated downloads, reuse-by-hash, MirrorError verification, relative relink.\n\n**Verify:** just test && uvx bandit -q -r src/\n\n```json:metadata\n{\"files\": [\"src/github_releases_pypi/index.py\", \"tests/test_index.py\"], \"verifyCommand\": \"just test && uvx bandit -q -r src/\", \"acceptanceCriteria\": [\"reuse skips downloads\", \"corrupted re-downloaded\", \"mismatch errors + cleanup\", \"headers + https guard\", \"relative relink\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 4: CLI --mirror",
+      "status": "completed",
+      "blockedBy": [2],
+      "description": "**Goal:** --mirror flag, cfg.mirror wiring, MirrorError surfacing.\n\n**Verify:** just test && just check-types\n\n```json:metadata\n{\"files\": [\"src/github_releases_pypi/cli.py\", \"tests/test_cli.py\"], \"verifyCommand\": \"just test && just check-types\", \"acceptanceCriteria\": [\"flag works\", \"--config conflict errors\", \"config mirror works\", \"MirrorError surfaced\"]}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 5: docs + full gate",
+      "status": "completed",
+      "blockedBy": [3],
+      "description": "**Goal:** README mirroring section; changelog; check-all green.\n\n**Verify:** just check-all\n\n```json:metadata\n{\"files\": [\"README.md\", \"doc/source/changelog.rst\"], \"verifyCommand\": \"just check-all\", \"acceptanceCriteria\": [\"README covers all mirroring facets\", \"check-all green\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-08-05"
+}
