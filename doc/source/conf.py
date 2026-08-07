@@ -17,10 +17,17 @@ extensions = [
     "sphinx.ext.todo",
     "sphinx_tabs.tabs",
     "sphinx.ext.viewcode",
+    "myst_parser",
+    "sphinxcontrib.typer",
 ]
 
 templates_path = ["_templates"]
 exclude_patterns = []
+
+# index.rst includes the README body as a fragment: its top level headings are ``##``
+# because the ``#`` title and the badges stay behind on GitHub. MyST cannot know that
+# and flags every one of them, so silence just that check.
+suppress_warnings = ["myst.header"]
 
 html_theme = "furo"
 html_theme_options = {
@@ -38,3 +45,5 @@ intersphinx_mapping = {
 }
 
 linkcheck_allow_redirects = True
+# Medium serves 403 to automated clients; the link is fine in a browser.
+linkcheck_ignore = [r"https://medium\.com/.*"]

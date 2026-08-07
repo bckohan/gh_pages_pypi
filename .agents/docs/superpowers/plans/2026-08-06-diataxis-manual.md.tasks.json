@@ -1,0 +1,33 @@
+{
+  "planPath": ".agents/docs/superpowers/plans/2026-08-06-diataxis-manual.md",
+  "tasks": [
+    {
+      "id": 0,
+      "subject": "Task 1: docs scaffolding",
+      "status": "pending",
+      "description": "**Goal:** extensions, skeleton, index with README include.\n\n**Verify:** just build-docs-html && just check-docs\n\n```json:metadata\n{\"files\": [\"pyproject.toml\", \"doc/source/conf.py\", \"doc/source/index.rst\", \"README.md\"], \"verifyCommand\": \"just build-docs-html && just check-docs\", \"acceptanceCriteria\": [\"extensions enabled\", \"README included\", \"absolute links\", \"clean toctree\"]}\n```"
+    },
+    {
+      "id": 1,
+      "subject": "Task 2: reference (configuration + CLI)",
+      "status": "pending",
+      "blockedBy": [0],
+      "description": "**Goal:** every key + error documented; typer-generated CLI page.\n\n**Verify:** just build-docs-html\n\n```json:metadata\n{\"files\": [\"doc/source/reference/configuration.rst\", \"doc/source/reference/cli.rst\"], \"verifyCommand\": \"just build-docs-html\", \"acceptanceCriteria\": [\"all keys\", \"all errors\", \"cross-key rules\", \"typer renders\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 3: tutorials",
+      "status": "pending",
+      "blockedBy": [0],
+      "description": "**Goal:** three standalone deployment tutorials.\n\n**Verify:** just build-docs-html\n\n```json:metadata\n{\"files\": [\"doc/source/tutorials/github-pages.rst\", \"doc/source/tutorials/cloudflare.rst\", \"doc/source/tutorials/nginx.rst\"], \"verifyCommand\": \"just build-docs-html\", \"acceptanceCriteria\": [\"standalone\", \"workflows match repo\", \"no branching\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 4: how-to guides + final gate",
+      "status": "pending",
+      "blockedBy": [2],
+      "description": "**Goal:** ten FAQ guides, README docs link, changelog, gate green.\n\n**Verify:** just check-all\n\n```json:metadata\n{\"files\": [\"doc/source/how-to/index.rst\", \"README.md\", \"doc/source/changelog.rst\"], \"verifyCommand\": \"just check-all\", \"acceptanceCriteria\": [\"ten guides\", \"code-verified\", \"gate green\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-08-06"
+}

@@ -9,6 +9,11 @@
 [![Test Status](https://github.com/bckohan/ghr-pypi/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/bckohan/ghr-pypi/actions/workflows/test.yml?query=branch:main)
 [![Lint Status](https://github.com/bckohan/ghr-pypi/actions/workflows/lint.yml/badge.svg?branch=main)](https://github.com/bckohan/ghr-pypi/actions/workflows/lint.yml?query=branch:main)
 
+**Documentation:** [ghr-pypi.readthedocs.io](https://ghr-pypi.readthedocs.io) — deployment
+tutorials, how-to guides, and the full configuration and CLI reference.
+
+<!-- docs-index-start -->
+
 **Tools for creating Python package indexes from GitHub release assets.** No
 index server, nothing published to pypi.org — just static PEP 503 HTML and
 PEP 691 JSON, servable from GitHub Pages, a CDN or your own webserver, and
@@ -52,7 +57,7 @@ can never deploy a blank package index.
 
 1. In repo **Settings → Pages**, set **Source** to **GitHub Actions**.
 2. Publish your packages' wheels/sdists as GitHub Release assets (see the
-   `github-release` job in [`release.yml`](.github/workflows/release.yml)
+   `github-release` job in [`release.yml`](https://github.com/bckohan/ghr-pypi/blob/main/.github/workflows/release.yml)
    for a tag-triggered example).
 3. Add a Pages workflow that runs the tool — the core of it:
 
@@ -67,7 +72,7 @@ can never deploy a blank package index.
        path: site
    ```
 
-   See [`pages.yml`](.github/workflows/pages.yml) for the full workflow
+   See [`pages.yml`](https://github.com/bckohan/ghr-pypi/blob/main/.github/workflows/pages.yml) for the full workflow
    (triggers, permissions, deploy job). Note: releases created by workflows
    with `GITHUB_TOKEN` don't fire `release` events, so a release workflow
    must dispatch the Pages workflow explicitly (ours does).
@@ -195,7 +200,7 @@ uv in particular resolves dramatically faster against large indexes.
   To publish metadata assets from your release workflow, extract each
   wheel's `METADATA` and upload it next to the wheel (see the
   "Extract PEP 658 metadata from wheels" step in
-  [`release.yml`](.github/workflows/release.yml) for the full version):
+  [`release.yml`](https://github.com/bckohan/ghr-pypi/blob/main/.github/workflows/release.yml) for the full version):
 
       - name: Extract PEP 658 metadata
         run: |
@@ -246,9 +251,9 @@ no-fragment`, `file.sha256` can be `None`, and an unconditional
 
 ## The live demo
 
-Two tiny packages live in [`packages/`](packages/):
-[`demo-lib`](packages/demo-lib) (a one-function library) and
-[`demo-app`](packages/demo-app) (depends on it, installs a `demo-app` CLI).
+Two tiny packages live in [`packages/`](https://github.com/bckohan/ghr-pypi/tree/main/packages):
+[`demo-lib`](https://github.com/bckohan/ghr-pypi/tree/main/packages/demo-lib) (a one-function library) and
+[`demo-app`](https://github.com/bckohan/ghr-pypi/tree/main/packages/demo-app) (depends on it, installs a `demo-app` CLI).
 Install them from this repo's Pages index:
 
 ```sh
@@ -293,4 +298,6 @@ just check      # lint, format, types, package, docs
 ```
 
 Cut a release with `just release` — it pushes a signed `v*` tag that triggers
-[`release.yml`](.github/workflows/release.yml).
+[`release.yml`](https://github.com/bckohan/ghr-pypi/blob/main/.github/workflows/release.yml).
+
+<!-- docs-index-end -->

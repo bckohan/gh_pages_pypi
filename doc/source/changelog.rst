@@ -22,3 +22,5 @@ Changelog
   release asset.
 * Versions are computed at build time from git tags; no version strings are
   stored in the repository.
+* Added a full Diátaxis documentation manual: tutorials, how-to guides, and
+  reference.

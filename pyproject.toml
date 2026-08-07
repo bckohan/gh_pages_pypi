@@ -70,10 +70,12 @@ packages = ["src/ghr_pypi"]
 docs = [
     "doc8>=1.1.2",
     "furo>=2024.8.6",
+    "myst-parser>=4.0",
     "readme-renderer[md]>=45.0",
     "sphinx>=8.0.0",
     "sphinx-autobuild>=2024.10.3",
     "sphinx-tabs>=3.4.7",
+    "sphinxcontrib-typer>=0.5",
 ]
 typing = [
     "pyright>=1.1.390",
@@ -125,6 +127,9 @@ reportDuplicateImport = true
 [tool.doc8]
 max-line-length = 100
 sphinx = true
+# doc8 parses with bare docutils and follows ``include`` directives, so it chokes on
+# index.rst's MyST include of the README (that parser requires a Sphinx environment).
+ignore-path = ["doc/source/index.rst"]
 
 [tool.pytest.ini_options]
 python_files = "test*.py"
