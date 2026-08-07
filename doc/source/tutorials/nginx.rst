@@ -170,9 +170,8 @@ itself, written twice: once as :pep:`503` HTML and once as the :pep:`691` JSON A
 
 .. note::
 
-   ``--mirror`` is a command line flag only for the single-repository form. With ``--config``
-   it must be set in the file, as it is here; passing both is an error. :ref:`configuration`
-   explains why.
+   ``--mirror`` is a flag of the command line form only. With ``--config`` it must be set in
+   the file, as it is here; passing both is an error. :ref:`configuration` explains why.
 
 Step 5 — Prepare the server
 ===========================

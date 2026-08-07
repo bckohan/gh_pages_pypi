@@ -23,9 +23,11 @@ and turn on ``mirror`` if you want the packages served from there too.
 
    ghr-pypi --config index.yml --out site
 
-Use the config file rather than the ``REPO`` argument: the single-repository form hard-codes
-the landing page's install example to ``https://<owner>.github.io/<name>/``, which would be a
-lie anywhere else.
+Set ``url`` explicitly rather than letting it default. Left unset in a config file it comes
+out empty — no install example at all — unless the build runs in GitHub Actions, where
+``$GITHUB_REPOSITORY`` supplies a ``https://<owner>.github.io/<name>/`` Pages address that
+would be a lie anywhere else. :ref:`The URL derivation rules <cli-url-derivation>` spell out
+exactly when.
 
 What the host has to do
 =======================

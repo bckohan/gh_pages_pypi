@@ -7,6 +7,10 @@ Changelog
 --------
 
 * Support yank/exclude.
+* The positional ``REPO`` argument takes zero or more repositories and defaults
+  to ``$GITHUB_REPOSITORY``; ``--out`` defaults to ``_site`` and the config
+  file's ``repositories`` key is optional. A GitHub Pages workflow can now run
+  ``ghr-pypi`` with no arguments.
 
 
 2026.8.6

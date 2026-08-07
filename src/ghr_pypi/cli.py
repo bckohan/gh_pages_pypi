@@ -1,33 +1,108 @@
 """Typer command line interface for ghr-pypi."""
 
+import os
 import urllib.error
+from dataclasses import replace
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
 from ghr_pypi import index
-from ghr_pypi.config import Config, ConfigError, load
+from ghr_pypi.config import Config, ConfigError, check_slug, load
 
 app = typer.Typer(add_completion=False)
 
 
+def _resolve_config(
+    repos: list[str] | None,
+    config_path: Path | None,
+    *,
+    mirror: bool,
+    env_repo: str | None,
+) -> Config:
+    """Resolve the build configuration from the command line and environment.
+
+    ``env_repo`` is ``$GITHUB_REPOSITORY``; an empty value counts as unset. It
+    is the last fallback in both branches and never conflicts with anything the
+    user typed: GitHub Actions sets it for every step, so treating it as a
+    conflict would break every config file user in CI. It is checked eagerly
+    whenever it is set, before any network request, so a broken environment
+    fails fast rather than at whichever later point first reads it — even in
+    the cases where nothing ends up reading it at all.
+    """
+    env_repo = env_repo or None
+    if env_repo is not None:
+        check_slug(env_repo, "GITHUB_REPOSITORY")
+    repos = list(repos or [])
+    if config_path is not None:
+        if repos:
+            raise ConfigError("with --config, list repositories in the config file")
+        if mirror:
+            raise ConfigError("with --config, set 'mirror' in the config file")
+        cfg = load(config_path)
+        repositories = cfg.repositories
+        if not repositories:
+            if env_repo is None:
+                raise ConfigError(
+                    f"{config_path} has no 'repositories' and "
+                    "GITHUB_REPOSITORY is not set"
+                )
+            repositories = (env_repo,)
+    else:
+        seen: set[str] = set()
+        for repo in repos:
+            check_slug(repo, "repository")
+            if repo.casefold() in seen:
+                raise ConfigError(f"repository {repo!r} given more than once")
+            seen.add(repo.casefold())
+        if repos:
+            repositories = tuple(repos)
+        elif env_repo is not None:
+            repositories = (env_repo,)
+        else:
+            raise ConfigError("provide REPO..., set GITHUB_REPOSITORY, or use --config")
+        cfg = Config(
+            repositories=repositories,
+            title=(
+                f"{repositories[0]} package index"
+                if len(repositories) == 1
+                else "Package index"
+            ),
+            mirror=mirror,
+        )
+    url = cfg.url
+    if url is None:
+        if env_repo is not None:
+            url = index.pages_url(env_repo)
+        elif config_path is None and len(repositories) == 1:
+            # Command line form only. A config that omits `url` has always
+            # meant "no install example", and a repository listed there is not
+            # necessarily the one serving the site.
+            url = index.pages_url(repositories[0])
+    return replace(cfg, repositories=repositories, url=url)
+
+
 @app.command()
 def build(
-    out: Annotated[Path, typer.Option(help="Directory to write the index to")],
-    repo: Annotated[
-        str | None,
+    repos: Annotated[
+        list[str] | None,
         typer.Argument(
-            help="GitHub repository as OWNER/NAME (exactly one of REPO or --config)"
+            metavar="[REPO]...",
+            help="GitHub repositories as OWNER/NAME; defaults to "
+            "$GITHUB_REPOSITORY (omit when using --config)",
         ),
     ] = None,
+    out: Annotated[Path, typer.Option(help="Directory to write the index to")] = Path(
+        "_site"
+    ),
     config: Annotated[
         Path | None,
         typer.Option(
             "--config",
             help=(
                 "YAML config aggregating multiple repositories "
-                "(exactly one of REPO or --config)"
+                "(list the repositories in it, not on the command line)"
             ),
         ),
     ] = None,
@@ -45,35 +120,19 @@ def build(
     ] = False,
 ) -> None:
     """Build a PEP 503 package index from GitHub release assets."""
-    if (repo is None) == (config is None):
-        typer.echo("error: provide exactly one of REPO or --config", err=True)
-        raise typer.Exit(1)
     if not token:
         typer.echo("error: provide --token or set GITHUB_TOKEN", err=True)
         raise typer.Exit(1)
-    if config is not None:
-        if mirror:
-            typer.echo(
-                "error: with --config, set 'mirror' in the config file", err=True
-            )
-            raise typer.Exit(1)
-        try:
-            cfg = load(config)
-        except ConfigError as error:
-            typer.echo(f"error: {error}", err=True)
-            raise typer.Exit(1) from error
-    else:
-        assert repo is not None
-        parts = repo.split("/")
-        if len(parts) != 2 or not all(parts):
-            typer.echo(f"error: repository {repo!r} is not OWNER/NAME", err=True)
-            raise typer.Exit(1)
-        cfg = Config(
-            repositories=(repo,),
-            title=f"{repo} package index",
-            url=index.pages_url(repo),
+    try:
+        cfg = _resolve_config(
+            repos,
+            config,
             mirror=mirror,
+            env_repo=os.environ.get("GITHUB_REPOSITORY"),
         )
+    except ConfigError as error:
+        typer.echo(f"error: {error}", err=True)
+        raise typer.Exit(1) from error
     releases = []
     try:
         for current in cfg.repositories:

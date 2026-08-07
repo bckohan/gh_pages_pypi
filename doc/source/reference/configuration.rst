@@ -6,16 +6,21 @@
 Configuration
 =============
 
-``ghr-pypi`` can be driven in two ways: with a single repository given as the positional
-``REPO`` argument, or with a YAML configuration file given with ``--config``. Exactly one of
-the two must be supplied — passing both, or neither, is an error (see :ref:`cli`).
+``ghr-pypi`` can be driven from the command line alone — repositories as
+positional arguments, or none at all, falling back to the
+``GITHUB_REPOSITORY`` environment variable — or with a YAML configuration file
+given with ``--config``. Repositories may not be given both ways at once (see
+:ref:`cli`).
 
-The configuration file is the only way to aggregate several repositories into one index, and
-the only way to set ``title``, ``url``, ``templates``, ``formats``, ``missing_digest``,
-``metadata``, ``mirror``, ``yanked``, or ``exclude``. The single-repository form supports
-``--mirror`` and otherwise uses the defaults listed below, with ``title`` set to
-``"<OWNER/NAME> package index"`` and ``url`` set to the repository's GitHub Pages URL
-(``https://<owner>.github.io/<name>/``).
+The configuration file is the only way to aggregate a fixed list of
+repositories into one index, and the only way to set ``title``, ``url``,
+``templates``, ``formats``, ``missing_digest``, ``metadata``, ``mirror``,
+``yanked``, or ``exclude``. The command line form supports ``--mirror`` and
+otherwise uses the defaults listed below, except that ``title`` becomes
+``"<OWNER/NAME> package index"`` when exactly one repository is resolved, and
+``url`` is derived from a GitHub Pages URL (``https://<owner>.github.io/<name>/``)
+when one can be determined — see
+:ref:`which repository that names, and when there is none <cli-url-derivation>`.
 
 The file is read as YAML and its top level must be a mapping. Only the ten keys documented
 here are accepted; any other key aborts the build. Every value is validated before any network
@@ -38,8 +43,8 @@ Summary
      - Notes
    * - :ref:`config-repositories`
      - list of ``OWNER/NAME`` strings
-     - *required*
-     - Non-empty, no case-insensitive duplicates
+     - *optional*
+     - When present: non-empty, no case-insensitive duplicates
    * - :ref:`config-templates`
      - string (path)
      - none
@@ -86,10 +91,19 @@ Keys
 ----------------
 
 :Type: list of strings
-:Default: none — **required**
-:Constraints: Must be a non-empty list. Every entry must be a string of exactly two
-              non-empty, ``/``-separated parts (``OWNER/NAME``). Entries must be unique
-              when compared case-insensitively.
+:Default: none — falls back to ``$GITHUB_REPOSITORY``. Positional ``REPO``
+          arguments are *not* a fallback: they may not be passed alongside
+          ``--config`` at all.
+:Constraints: When present, must be a non-empty list. Every entry must be a
+              string of exactly two non-empty, ``/``-separated parts
+              (``OWNER/NAME``). Entries must be unique when compared
+              case-insensitively.
+
+Omitting the key is useful when the file exists only to set ``title``,
+``templates`` or ``yanked`` for the repository the build is running in: inside
+GitHub Actions ``GITHUB_REPOSITORY`` supplies the repository. Writing the key
+with no value (``repositories:``) is the same as omitting it. If nothing
+supplies a repository, the build fails rather than producing an empty index.
 
 The repositories whose releases are indexed. Every wheel (``.whl``) and sdist (``.tar.gz``)
 attached to any non-draft release of any listed repository becomes an entry in the index.
@@ -172,9 +186,11 @@ copy-pasteable install command built from it — the value is stripped of traili
 
    pip install --extra-index-url https://yourorg.github.io/pypi/simple/ PACKAGE
 
-When omitted, the landing page simply links to the simple index without an install example.
-The value is not used for anything else: it does not rewrite asset URLs and it is not required
-for the index to work.
+When omitted, the landing page simply links to the simple index without an install example —
+unless ``$GITHUB_REPOSITORY`` is set, which supplies one. It is never derived from this file's
+own :ref:`config-repositories`; see
+:ref:`the URL derivation rules <cli-url-derivation>` for why. The value is not used for
+anything else: it does not rewrite asset URLs and it is not required for the index to work.
 
 .. code-block:: yaml
 
@@ -259,9 +275,9 @@ at the canonical URLs through ``Accept``-header content negotiation on
 :Type: boolean
 :Default: ``false``
 :Constraints: Must be ``true`` or ``false``. Cannot be combined with
-              :ref:`config-missing-digest`. On the single-repository command line the
-              equivalent is the ``--mirror`` flag; passing ``--mirror`` together with
-              ``--config`` is an error.
+              :ref:`config-missing-digest`. On the command line the equivalent is the
+              ``--mirror`` flag; passing ``--mirror`` together with ``--config`` is an
+              error.
 
 With ``mirror: true`` the builder downloads every indexed asset into
 ``<out>/files/<project>/`` and rewrites the index links to relative paths, so the finished
@@ -430,7 +446,8 @@ Validation runs in the order listed, so only the first problem is reported.
 ``{path}: top level must be a mapping``
    **Cause:** the document parses but is not a mapping — for example it is a bare list, a
    scalar, or empty.
-   **Fix:** make the top level ``key: value`` pairs, starting with ``repositories:``.
+   **Fix:** make the top level ``key: value`` pairs — an empty file is not a valid
+   configuration even though every key is optional.
 
 ``{path}: unknown key(s): {names}``
    **Cause:** the mapping contains keys outside the ten documented above; the sorted list
@@ -438,8 +455,10 @@ Validation runs in the order listed, so only the first problem is reported.
    **Fix:** remove or rename them. Typos such as ``repository:`` or ``mirrors:`` land here.
 
 ``{path}: 'repositories' must be a non-empty list``
-   **Cause:** ``repositories`` is absent, is not a list, or is an empty list.
-   **Fix:** provide at least one ``OWNER/NAME`` entry.
+   **Cause:** ``repositories`` is not a list, or is an empty list (only checked when the key
+   is present — an absent key, or one written with no value, falls back to
+   ``$GITHUB_REPOSITORY``).
+   **Fix:** provide at least one ``OWNER/NAME`` entry, or remove the key entirely.
 
 ``{path}: repository {repo!r} is not OWNER/NAME``
    **Cause:** an entry is not a string, or does not split into exactly two non-empty parts on
@@ -598,8 +617,9 @@ served from a custom domain, with overridden templates and both output formats.
 
    # index.yml — passed as: ghr-pypi --config index.yml --out site
 
-   # Required. Releases from these repositories are aggregated, in order.
-   # On a filename collision the first repository listed wins.
+   # Optional. Releases from these repositories are aggregated, in order.
+   # On a filename collision the first repository listed wins. Omit the key to
+   # index $GITHUB_REPOSITORY instead.
    repositories:
      - yourorg/lib-one
      - yourorg/lib-two

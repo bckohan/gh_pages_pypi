@@ -42,6 +42,17 @@ def test_load_minimal_defaults(tmp_path):
     assert cfg.url is None
 
 
+def test_repositories_may_be_omitted(tmp_path):
+    cfg = load(write(tmp_path, "title: Just a title\n"))
+    assert cfg.repositories == ()
+    assert cfg.title == "Just a title"
+
+
+def test_repositories_explicit_null_treated_as_omitted(tmp_path):
+    cfg = load(write(tmp_path, "repositories:\n"))
+    assert cfg.repositories == ()
+
+
 def test_templates_relative_to_config_dir(tmp_path, monkeypatch):
     (tmp_path / "tpl").mkdir()
     monkeypatch.chdir(tmp_path.parent)  # CWD != config dir
@@ -54,7 +65,6 @@ def test_templates_relative_to_config_dir(tmp_path, monkeypatch):
     [
         ("- just\n- a list\n", "top level must be a mapping"),
         ("repositories: [a/b]\nbogus: 1\n", "unknown key"),
-        ("title: no repos\n", "'repositories' must be a non-empty list"),
         ("repositories: []\n", "'repositories' must be a non-empty list"),
         ("repositories: notalist\n", "'repositories' must be a non-empty list"),
         ("repositories: [noslash]\n", "is not OWNER/NAME"),

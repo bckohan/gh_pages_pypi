@@ -49,11 +49,32 @@ The other error lines
    is concerned (GitHub answers 404 rather than 403 for repositories a token cannot see);
    rate limiting; a network failure.
 
-``error: provide exactly one of REPO or --config``
-   ``REPO`` and ``--config`` are mutually exclusive, and one of them is mandatory.
+``error: provide REPO..., set GITHUB_REPOSITORY, or use --config``
+   No repositories were resolved. Pass one or more ``OWNER/NAME`` arguments,
+   run inside GitHub Actions (which sets ``GITHUB_REPOSITORY``), or supply a
+   config file that lists them.
+
+``error: with --config, list repositories in the config file``
+   Positional arguments and ``--config`` are mutually exclusive. Move the
+   repositories into the file's ``repositories`` key. ``GITHUB_REPOSITORY``
+   does not trigger this — it is used only when the file omits the key.
+
+``error: <path> has no 'repositories' and GITHUB_REPOSITORY is not set``
+   The config file omits ``repositories`` and there is nothing to fall back to.
+   Add the key, or pass the repository in the environment.
+
+``error: GITHUB_REPOSITORY 'x' is not OWNER/NAME``
+   The environment variable is malformed. It is validated whenever it is set,
+   even when the repositories come from elsewhere, so that a broken environment
+   fails before any network request.
+
+``error: repository 'x' given more than once``
+   The same repository was passed twice on the command line (the comparison
+   ignores case). There is no such check across sources — an argument that
+   differs only in case from ``GITHUB_REPOSITORY`` is taken as given.
 
 ``error: with --config, set 'mirror' in the config file``
-   ``--mirror`` is a flag of the single-repository form only; with a config file it is a key.
+   ``--mirror`` is a flag of the command line form only; with a config file it is a key.
 
 ``error: <config message>``
    Configuration validation. Every message is listed with its cause and fix in
@@ -62,8 +83,8 @@ The other error lines
 ``error: downloading a release asset failed: ...``
    A file transfer failed — while hashing digest-less assets, or while mirroring.
 
-Exit status 2, with usage text, means the command line itself did not parse (a missing
-``--out``, an unknown option).
+Exit status 2, with usage text, means the command line itself did not parse (an unknown
+option, a missing option value).
 
 Warnings are not failures
 =========================

@@ -7,7 +7,16 @@ How do I aggregate several repositories into one index?
 =======================================================
 
 List them in a YAML config file and pass it with ``--config``. The config file replaces the
-positional ``REPO`` argument — it is the only way to index more than one repository.
+positional ``REPO`` arguments — passing both is an error — and it is the only way to keep the
+list in version control alongside the settings an aggregate index needs: ``title``, ``url``,
+``templates``, ``formats``, ``missing_digest``, ``metadata``, ``yanked`` and ``exclude``.
+
+For a one-off build there is a quicker route: the positional argument takes as many
+repositories as you like, so ``ghr-pypi yourorg/lib-one yourorg/lib-two --out site`` aggregates
+them with no file at all. What you give up is everything above — the title falls back to
+``Package index``, and the landing page gets an install example only when
+``$GITHUB_REPOSITORY`` is set. Reach for the config file as soon as the index is something you
+publish rather than something you inspect.
 
 .. code-block:: yaml
 
@@ -56,7 +65,8 @@ Collisions and duplicates
 
 * Listing the same repository twice is rejected outright, case-insensitively:
   ``yourorg/Lib`` and ``yourorg/lib`` collide with
-  ``'repositories' contains duplicates``.
+  ``'repositories' contains duplicates``. The command line form rejects the same thing with
+  ``repository '...' given more than once``.
 
 * Every entry must be a bare ``OWNER/NAME`` slug — not a URL, not a clone path.
 
@@ -64,5 +74,5 @@ Next
 ====
 
 * :ref:`config-repositories` — the exact constraints and error messages.
-* :ref:`cli` — why ``--mirror`` is refused with ``--config``, and what the single-repository
-  form defaults differently.
+* :ref:`cli` — why ``--mirror`` is refused with ``--config``, and what the command line form
+  defaults differently.

@@ -149,7 +149,7 @@ Create ``.github/workflows/release.yml``:
 Step 3 — Add the Pages workflow
 ===============================
 
-This workflow reads the repository's releases, writes a :pep:`503` index into ``site/``, and
+This workflow reads the repository's releases, writes a :pep:`503` index into ``_site/``, and
 publishes that directory to GitHub Pages.
 
 Create ``.github/workflows/pages.yml``:
@@ -180,13 +180,11 @@ Create ``.github/workflows/pages.yml``:
          - name: Build the package index
            env:
              GITHUB_TOKEN: ${{ github.token }}
-           run: uvx ghr-pypi "$GITHUB_REPOSITORY" --out site
+           run: uvx ghr-pypi
 
          - uses: actions/configure-pages@v6
 
          - uses: actions/upload-pages-artifact@v5
-           with:
-             path: site
 
      deploy:
        needs: build
@@ -201,7 +199,13 @@ Create ``.github/workflows/pages.yml``:
          - id: deployment
            uses: actions/deploy-pages@v5
 
-Three things about this file are worth noticing.
+Four things about this file are worth noticing.
+
+The build step passes no arguments at all. ``ghr-pypi`` takes the repository to index from
+``GITHUB_REPOSITORY``, which Actions sets for every step, and writes the site to ``_site`` —
+which is also the directory ``actions/upload-pages-artifact`` uploads when it is given no
+``path``. Naming either one explicitly (``ghr-pypi "$GITHUB_REPOSITORY" --out site``, with a
+matching ``path: site``) still works and is what you would do outside Actions.
 
 The build job never checks the repository out. It does not need to: ``ghr-pypi`` reads the
 releases through GitHub's API, so the only inputs are the repository name and a token.
@@ -282,7 +286,7 @@ Now read what the index build actually said:
 Two lines come back, each prefixed by ``gh`` with its job and step name. The first is the
 result::
 
-   wrote index for 1 project(s) to site
+   wrote index for 1 project(s) to _site
 
 The second is a warning::
 
@@ -369,7 +373,6 @@ Where to go next
 * The :ref:`how-to guides <how-to>` answer the questions that come next: aggregating several
   repositories into one index, indexing a private repository, customizing the landing page.
 * :ref:`configuration` documents every key of the YAML configuration file, which is how you
-  set the title, the URL, and everything else the single-repository form leaves at its
-  default.
+  set the title, the URL, and everything else the command line form leaves at its default.
 * :ref:`cli` documents every command line option, every exit code, and every error message.
 * The tool itself lives at repo_.

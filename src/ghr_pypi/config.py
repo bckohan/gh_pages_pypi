@@ -29,7 +29,23 @@ _KNOWN_KEYS = {
 
 
 class ConfigError(ValueError):
-    """Raised when the YAML configuration is missing or invalid."""
+    """Raised when the build configuration is missing or invalid.
+
+    Covers the YAML file as well as the command line arguments and environment
+    that ``cli._resolve_config`` folds into a :class:`Config`.
+    """
+
+
+def check_slug(value: Any, label: str) -> None:
+    """Raise ``ConfigError`` unless ``value`` is an ``OWNER/NAME`` slug.
+
+    ``label`` names the source of the value ("repository",
+    "GITHUB_REPOSITORY"); the value's repr is appended by this function, so
+    callers never format it themselves.
+    """
+    parts = value.split("/") if isinstance(value, str) else []
+    if len(parts) != 2 or not all(parts):
+        raise ConfigError(f"{label} {value!r} is not OWNER/NAME")
 
 
 def _normalize(name: str) -> str:
@@ -129,9 +145,14 @@ Deeply immutable, so it is safe to share as a default argument.
 
 @dataclass(frozen=True)
 class Config:
-    """Validated build configuration."""
+    """Validated build configuration.
 
-    repositories: tuple[str, ...]
+    An empty ``repositories`` means the key was not configured, not that the
+    index should contain nothing; the caller must supply the repositories
+    from elsewhere.
+    """
+
+    repositories: tuple[str, ...] = ()
     templates: Path | None = None
     title: str = "Package index"
     url: str | None = None
@@ -246,15 +267,16 @@ def load(path: Path) -> Config:
         raise ConfigError(f"{path}: top level must be a mapping")
     if unknown := set(raw) - _KNOWN_KEYS:
         raise ConfigError(f"{path}: unknown key(s): {', '.join(sorted(unknown))}")
-    repositories = raw.get("repositories")
-    if not isinstance(repositories, list) or not repositories:
-        raise ConfigError(f"{path}: 'repositories' must be a non-empty list")
-    for repo in repositories:
-        parts = repo.split("/") if isinstance(repo, str) else []
-        if len(parts) != 2 or not all(parts):
-            raise ConfigError(f"{path}: repository {repo!r} is not OWNER/NAME")
-    if len({r.casefold() for r in repositories}) != len(repositories):
-        raise ConfigError(f"{path}: 'repositories' contains duplicates")
+    repositories = []
+    # optional: callers may supply the repositories from elsewhere
+    if (raw_repositories := raw.get("repositories")) is not None:
+        if not isinstance(raw_repositories, list) or not raw_repositories:
+            raise ConfigError(f"{path}: 'repositories' must be a non-empty list")
+        for repo in raw_repositories:
+            check_slug(repo, f"{path}: repository")
+        if len({r.casefold() for r in raw_repositories}) != len(raw_repositories):
+            raise ConfigError(f"{path}: 'repositories' contains duplicates")
+        repositories = raw_repositories
     templates = None
     if (raw_templates := raw.get("templates")) is not None:
         if not isinstance(raw_templates, str):

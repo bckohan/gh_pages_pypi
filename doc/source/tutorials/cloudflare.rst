@@ -422,7 +422,6 @@ Where to go next
 * :ref:`config-mirror` explains exactly what mirroring does, how downloads are verified, and
   what it does not clean up.
 * :ref:`configuration` documents every key of the YAML configuration file, which is how you
-  set the title, the URL, and everything else the single-repository form leaves at its
-  default.
+  set the title, the URL, and everything else the command line form leaves at its default.
 * :ref:`cli` documents every command line option, every exit code, and every error message.
 * The tool itself lives at repo_.

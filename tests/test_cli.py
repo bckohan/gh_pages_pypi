@@ -1,12 +1,29 @@
 import json
 
+import pytest
 from typer.testing import CliRunner
 
 from ghr_pypi import index
-from ghr_pypi.cli import app
+from ghr_pypi.cli import _resolve_config, app
+from ghr_pypi.config import ConfigError
 from tests.test_index import FILTER_RELEASES, FIXTURE_RELEASES
 
 runner = CliRunner()
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _no_github_repository():
+    """Unset GITHUB_REPOSITORY for this module.
+
+    GitHub Actions sets it for every step, including the test run, and the CLI
+    derives the Pages URL from it. An ambient value would silently supply a URL
+    to the tests that assert there is none — notably
+    ``test_cli_config_merges_repositories``, whose
+    ``"--extra-index-url" not in landing`` would fail in CI only.
+    """
+    with pytest.MonkeyPatch.context() as mp:
+        mp.delenv("GITHUB_REPOSITORY", raising=False)
+        yield
 
 
 def all_output(result):
@@ -63,6 +80,21 @@ def test_cli_writes_site(tmp_path, monkeypatch):
     assert (tmp_path / "simple" / "ghr-pypi-demo-lib" / "index.html").exists()
 
 
+def test_cli_single_repository_advertises_the_index(tmp_path, monkeypatch):
+    # the config test only asserts the install example is absent; this proves
+    # it renders at all when a url is derived
+    monkeypatch.setattr(index, "fetch_releases", fetch_stub(FIXTURE_RELEASES))
+    monkeypatch.setattr(index, "hash_url", lambda url: "cafef00d")
+    out = tmp_path / "site"
+    result = runner.invoke(app, ["bckohan/ghr-pypi", "--out", str(out), "--token", "x"])
+    assert result.exit_code == 0, all_output(result)
+    landing = (out / "index.html").read_text()
+    assert (
+        "--extra-index-url https://bckohan.github.io/ghr-pypi/simple/ PACKAGE"
+        in landing
+    )
+
+
 def test_cli_token_from_env(tmp_path, monkeypatch):
     monkeypatch.setenv("GITHUB_TOKEN", "x")
     monkeypatch.setattr(index, "fetch_releases", fetch_stub(FIXTURE_RELEASES))
@@ -78,18 +110,128 @@ def config_file(tmp_path, text):
     return cfg
 
 
-def test_cli_requires_exactly_one_source(tmp_path):
-    result = runner.invoke(app, ["--out", str(tmp_path), "--token", "x"])
-    assert result.exit_code == 1
-    assert "provide exactly one of REPO or --config" in all_output(result)
+def resolve(repos=None, config=None, *, mirror=False, env_repo=None):
+    return _resolve_config(repos, config, mirror=mirror, env_repo=env_repo)
 
-    cfg = config_file(tmp_path, "repositories: [a/b]\n")
-    result = runner.invoke(
-        app,
-        ["a/b", "--config", str(cfg), "--out", str(tmp_path), "--token", "x"],
+
+def test_resolve_needs_a_source():
+    with pytest.raises(ConfigError, match="provide REPO"):
+        resolve()
+
+
+def test_resolve_falls_back_to_the_environment():
+    cfg = resolve(env_repo="bckohan/ghr-pypi")
+    assert cfg.repositories == ("bckohan/ghr-pypi",)
+    assert cfg.title == "bckohan/ghr-pypi package index"
+    assert cfg.url == "https://bckohan.github.io/ghr-pypi/"
+
+
+def test_resolve_empty_environment_variable_counts_as_unset():
+    with pytest.raises(ConfigError, match="provide REPO"):
+        resolve(env_repo="")
+
+
+def test_resolve_several_repositories():
+    cfg = resolve(["a/one", "a/two"])
+    assert cfg.repositories == ("a/one", "a/two")
+    assert cfg.title == "Package index"
+    assert cfg.url is None
+
+
+def test_resolve_derives_the_url_from_a_lone_argument():
+    assert resolve(["a/one"]).url == "https://a.github.io/one/"
+
+
+def test_resolve_url_comes_from_the_pages_host():
+    cfg = resolve(["a/one", "a/two"], env_repo="host/site")
+    assert cfg.repositories == ("a/one", "a/two")
+    assert cfg.url == "https://host.github.io/site/"
+
+
+def test_resolve_arguments_outrank_the_environment():
+    cfg = resolve(["a/one"], env_repo="host/site")
+    assert cfg.repositories == ("a/one",)
+    assert cfg.url == "https://host.github.io/site/"
+
+
+def test_resolve_rejects_a_bad_argument():
+    with pytest.raises(ConfigError, match="repository 'nope' is not OWNER/NAME"):
+        resolve(["nope"])
+
+
+def test_resolve_rejects_a_bad_environment_value():
+    with pytest.raises(ConfigError, match="GITHUB_REPOSITORY 'nope' is not OWNER/NAME"):
+        resolve(env_repo="nope")
+
+
+def test_resolve_rejects_duplicate_arguments():
+    with pytest.raises(ConfigError, match="given more than once"):
+        resolve(["a/one", "A/One"])
+
+
+def test_resolve_does_not_deduplicate_across_sources():
+    # by design: the argument and the environment are separate sources, so a
+    # case-only difference between them is not a duplicate
+    cfg = resolve(["Host/Site"], env_repo="host/site")
+    assert cfg.repositories == ("Host/Site",)
+    assert cfg.url == "https://host.github.io/site/"
+
+
+def test_resolve_config_repositories_win(tmp_path):
+    cfg_file = config_file(tmp_path, "repositories: [a/one]\n")
+    cfg = resolve(config=cfg_file, env_repo="host/site")
+    assert cfg.repositories == ("a/one",)
+    assert cfg.url == "https://host.github.io/site/"
+
+
+def test_resolve_config_never_derives_a_url_from_its_repositories(tmp_path):
+    # a config omitting 'url' means "no install example"; the one repository
+    # listed is not necessarily the one serving the site
+    cfg_file = config_file(tmp_path, "repositories: [a/one]\n")
+    assert resolve(config=cfg_file).url is None
+
+
+def test_resolve_rejects_arguments_beside_a_config(tmp_path):
+    cfg_file = config_file(tmp_path, "repositories: [a/one]\n")
+    with pytest.raises(ConfigError, match="list repositories in the config file"):
+        resolve(["a/two"], cfg_file)
+
+
+def test_resolve_config_without_repositories_uses_the_environment(tmp_path):
+    cfg_file = config_file(tmp_path, "title: Mine\n")
+    cfg = resolve(config=cfg_file, env_repo="host/site")
+    assert cfg.repositories == ("host/site",)
+    assert cfg.title == "Mine"
+
+
+def test_resolve_config_without_repositories_and_no_environment(tmp_path):
+    cfg_file = config_file(tmp_path, "title: Mine\n")
+    with pytest.raises(ConfigError, match="has no 'repositories'"):
+        resolve(config=cfg_file)
+
+
+def test_resolve_keeps_the_configured_url(tmp_path):
+    cfg_file = config_file(
+        tmp_path, "repositories: [a/one]\nurl: https://example.com/pypi/\n"
     )
-    assert result.exit_code == 1
-    assert "provide exactly one of REPO or --config" in all_output(result)
+    cfg = resolve(config=cfg_file, env_repo="host/site")
+    assert cfg.url == "https://example.com/pypi/"
+
+
+def test_resolve_rejects_mirror_beside_a_config(tmp_path):
+    cfg_file = config_file(tmp_path, "repositories: [a/one]\n")
+    with pytest.raises(ConfigError, match="set 'mirror' in the config file"):
+        resolve(config=cfg_file, mirror=True)
+
+
+def test_cli_defaults_repository_and_out(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GITHUB_REPOSITORY", "bckohan/ghr-pypi")
+    monkeypatch.setattr(index, "fetch_releases", fetch_stub(FIXTURE_RELEASES))
+    monkeypatch.setattr(index, "hash_url", lambda url: "cafef00d")
+    result = runner.invoke(app, ["--token", "x"])
+    assert result.exit_code == 0, all_output(result)
+    assert (tmp_path / "_site" / "simple" / "index.html").exists()
 
 
 def test_cli_config_merges_repositories(tmp_path, monkeypatch):

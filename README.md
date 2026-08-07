@@ -35,21 +35,25 @@ uvx ghr-pypi --help
 ## Usage
 
 ```bash
-ghr-pypi OWNER/REPO --out site [--token TOKEN]
+ghr-pypi [OWNER/REPO...] [--out DIRECTORY] [--token TOKEN]
 ```
 
-Reads every (non-draft) release of `OWNER/REPO` via the GitHub API
+Reads every (non-draft) release of each `OWNER/REPO` via the GitHub API
 (`--token` defaults to `$GITHUB_TOKEN`), collects the wheel/sdist assets,
 takes each file's `sha256` from the API's asset digest (downloading and
 hashing only files that lack one), and writes a static
-[PEP 503](https://peps.python.org/pep-0503/) index to `site/`:
+[PEP 503](https://peps.python.org/pep-0503/) index to `--out` (default
+`_site/`):
 
 ```
-site/index.html                   → human landing page
-site/simple/                      → lists every project
-site/simple/<project>/            → file links with #sha256= fragments
-site/simple/**/index.json         → PEP 691 JSON Simple API (see below)
+_site/index.html                  → human landing page
+_site/simple/                     → lists every project
+_site/simple/<project>/           → file links with #sha256= fragments
+_site/simple/**/index.json        → PEP 691 JSON Simple API (see below)
 ```
+
+With no repository argument it indexes `$GITHUB_REPOSITORY`, so inside a
+GitHub Actions workflow `ghr-pypi` on its own is the whole command.
 
 It refuses to build an empty index (non-zero exit) so a misconfigured CI run
 can never deploy a blank package index.
@@ -67,11 +71,12 @@ can never deploy a blank package index.
    - name: Build the package index
      env:
        GITHUB_TOKEN: ${{ github.token }}
-     run: uvx ghr-pypi "$GITHUB_REPOSITORY" --out site
-   - uses: actions/upload-pages-artifact@v3
-     with:
-       path: site
+     run: uvx ghr-pypi
+   - uses: actions/upload-pages-artifact@v5
    ```
+
+   With no arguments it indexes `$GITHUB_REPOSITORY` into `_site`, which is
+   also what `upload-pages-artifact` uploads by default.
 
    See [`pages.yml`](https://github.com/bckohan/ghr-pypi/blob/main/.github/workflows/pages.yml) for the full workflow
    (triggers, permissions, deploy job). Note: releases created by workflows
@@ -147,7 +152,7 @@ spec-defined and is NOT affected by template overrides.
 
 ## Mirroring assets
 
-With `mirror: true` (or `--mirror` on the single-repository form), the
+With `mirror: true` (or `--mirror` on the command line form), the
 builder downloads every asset into `site/files/<project>/` and the index
 links to those local copies with relative URLs — the site is fully
 self-contained and relocatable, and GitHub is out of the serving path.
@@ -164,8 +169,10 @@ ghr-pypi yourorg/private-repo --out site --token $TOKEN --mirror
 
 When the mirrored site will be hosted somewhere other than GitHub Pages,
 prefer a config file with `mirror: true` and set `url` to the real host (or
-omit it) — the single-repository form assumes a Pages URL for the landing
-page's install example.
+omit it — with a config file, omitting `url` means no install example at all,
+unless `$GITHUB_REPOSITORY` is set, which supplies the building repository's
+Pages URL). The bare command line form instead assumes a Pages URL whenever it
+can derive one. The CLI reference documents exactly when each applies.
 
 Every mirrored file is hashed while downloading; when GitHub's API
 advertises a digest it is verified and a mismatch fails the build

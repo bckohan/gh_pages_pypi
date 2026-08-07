@@ -1,0 +1,26 @@
+{
+  "planPath": ".agents/docs/superpowers/plans/2026-08-07-repo-argument-defaults.md",
+  "tasks": [
+    {
+      "id": 0,
+      "subject": "Task 1: config repositories optional",
+      "status": "completed",
+      "description": "**Goal:** a config file may omit `repositories`; when present it validates exactly as before.\n\n**Verify:** uv run pytest tests/test_config.py -q && just check-types\n\n```json:metadata\n{\"files\": [\"src/ghr_pypi/config.py\", \"tests/test_config.py\"], \"verifyCommand\": \"uv run pytest tests/test_config.py -q && just check-types\", \"acceptanceCriteria\": [\"Config.repositories defaults to ()\", \"config with only title loads\", \"repositories: [] still rejected\", \"malformed entry and duplicates still rejected\"]}\n```"
+    },
+    {
+      "id": 1,
+      "subject": "Task 2: _resolve_config, variadic REPO, --out default",
+      "status": "completed",
+      "blockedBy": [0],
+      "description": "**Goal:** zero-argument invocation resolves from $GITHUB_REPOSITORY and writes to _site; precedence unit-testable without CliRunner.\n\n**Verify:** just test\n\n```json:metadata\n{\"files\": [\"src/ghr_pypi/cli.py\", \"src/ghr_pypi/config.py\", \"tests/conftest.py\", \"tests/test_cli.py\"], \"verifyCommand\": \"just test\", \"acceptanceCriteria\": [\"autouse fixture deletes GITHUB_REPOSITORY\", \"_resolve_config pure, raises ConfigError\", \"precedence config > args > env\", \"args+config error, env+config fine\", \"url derived from env in both branches\", \"title derived only without config\", \"--out defaults to _site\", \"mutation-proven wiring\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 3: workflow, docs, full gate",
+      "status": "completed",
+      "blockedBy": [1],
+      "description": "**Goal:** pages.yml uses the zero-argument form; every doc describing the old contract is corrected.\n\n**Verify:** just check-all\n\n```json:metadata\n{\"files\": [\".github/workflows/pages.yml\", \"README.md\", \"direction.md\", \"doc/source/reference/cli.rst\", \"doc/source/reference/configuration.rst\", \"doc/source/how-to/build-failed.rst\", \"doc/source/tutorials/github-pages.rst\", \"doc/source/changelog.rst\"], \"verifyCommand\": \"just check-all\", \"acceptanceCriteria\": [\"pages.yml runs bare CLI, no with: path:\", \"no 'exactly one of REPO' anywhere\", \"cli.rst documents variadic REPO, env fallback, _site\", \"configuration.rst shows repositories optional\", \"build-failed.rst lists the new messages\", \"direction.md bullets removed\", \"just check-all exit 0\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-08-07"
+}
