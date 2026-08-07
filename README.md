@@ -97,6 +97,13 @@ missing_digest: download                # optional — see below
 formats: [html, json]                   # optional — default: both
 mirror: false                           # optional — see "Mirroring assets"
 metadata: true                          # optional — see "Dependency metadata"
+
+yanked:                                 # optional — PEP 592 yanks, keyed by
+  yourpkg:                              #   project then (quoted) version
+    "1.0.1": broken sdist, use 1.0.2    #   reason string, or `true`
+exclude:                                # optional — versions dropped from the
+  yourpkg:                              #   index entirely
+    - "0.0.1"                           #   see below
 ```
 
 ```sh
@@ -217,6 +224,37 @@ uv in particular resolves dramatically faster against large indexes.
 Set `metadata: false` to disable extraction, advertising, and warnings.
 If you replace `project.html` wholesale, copy the built-in's
 `data-core-metadata` handling to keep advertising metadata.
+
+## Yanking and excluding releases
+
+A bad release does not have to be deleted. `yanked` marks it
+[PEP 592](https://peps.python.org/pep-0592/) yanked: the file stays in the
+index (and in the PEP 700 `versions` list, and in the mirror) carrying a
+`data-yanked` attribute and a `"yanked"` JSON key, so pip and uv stop
+selecting it — but still install it, and print your reason, when a
+requirement pins that exact version. Existing pinned installs keep working.
+
+`exclude` is the harder edge: the listed versions never enter the index at
+all — no link, no JSON entry, no `versions` entry, nothing mirrored — and
+anything pinned to them stops resolving. Use it when the release must not be
+installable by anyone.
+
+```yaml
+yanked:
+  yourpkg:
+    "1.0.1": broken sdist, use 1.0.2   # or `true` for no reason
+exclude:
+  yourpkg:
+    - "0.0.1"
+```
+
+Both are keyed by project (PEP 503-normalized) then version, and versions
+match by PEP 440 equivalence, so `"1.0"` matches a `1.0.0` file — but
+`"1.0.0"` does *not* match `1.0.0+local`; write local versions out in full.
+Neither key touches GitHub: removing the entry restores the files on the
+next build. If you replace `project.html` wholesale, copy the built-in's
+`data-yanked` conditional too, or yanked files will be published as if they
+were fine.
 
 ## Customizing templates
 

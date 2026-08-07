@@ -6,6 +6,7 @@ import zipfile
 import pytest
 
 from ghr_pypi import index
+from ghr_pypi.config import Filters
 
 FIXTURE_RELEASES = [
     {
@@ -837,3 +838,247 @@ def test_write_site_formats_json_only(tmp_path):
     assert not list(tmp_path.rglob("*.html"))
     assert (tmp_path / "simple" / "index.json").exists()
     assert (tmp_path / "simple" / "ghr-pypi-demo-lib" / "index.json").exists()
+
+
+FILTER_RELEASES = [
+    {
+        "tag_name": "yankee-v1.0.0",
+        "assets": [
+            {
+                "name": "yankee-1.0.0-py3-none-any.whl",
+                "browser_download_url": "https://github.com/o/r/releases/download/yankee-v1.0.0/yankee-1.0.0-py3-none-any.whl",
+                "digest": "sha256:aaaa",
+            },
+            {
+                "name": "yankee-1.0.0.tar.gz",
+                "browser_download_url": "https://github.com/o/r/releases/download/yankee-v1.0.0/yankee-1.0.0.tar.gz",
+                "digest": "sha256:bbbb",
+            },
+        ],
+    },
+    {
+        "tag_name": "yankee-v1.1.0",
+        "assets": [
+            {
+                "name": "yankee-1.1.0-py3-none-any.whl",
+                "browser_download_url": "https://github.com/o/r/releases/download/yankee-v1.1.0/yankee-1.1.0-py3-none-any.whl",
+                "digest": "sha256:cccc",
+            },
+        ],
+    },
+]
+
+
+def test_collect_projects_filters_default_to_a_noop():
+    projects = index.collect_projects(FILTER_RELEASES, hash_url=never_hash)
+    assert [f["filename"] for f in projects["yankee"]] == [
+        "yankee-1.0.0-py3-none-any.whl",
+        "yankee-1.0.0.tar.gz",
+        "yankee-1.1.0-py3-none-any.whl",
+    ]
+    assert all(f["yanked"] is False for f in projects["yankee"])
+
+
+def test_collect_projects_excludes_a_version():
+    projects = index.collect_projects(
+        FILTER_RELEASES,
+        hash_url=never_hash,
+        filters=Filters(exclude={"yankee": ("1.0.0",)}),
+    )
+    assert [f["filename"] for f in projects["yankee"]] == [
+        "yankee-1.1.0-py3-none-any.whl"
+    ]
+
+
+def test_collect_projects_exclude_drops_the_project_when_nothing_remains():
+    projects = index.collect_projects(
+        FILTER_RELEASES,
+        hash_url=never_hash,
+        filters=Filters(exclude={"Yankee": ("1.0", "1.1")}),
+    )
+    assert projects == {}
+
+
+def test_collect_projects_excluded_file_is_never_hashed():
+    # exclusion must precede the missing-digest policy too: this asset has no
+    # digest, so reaching the hashing branch would blow up in never_hash
+    release = {
+        "tag_name": "nodigest-v3.0.0",
+        "assets": [
+            {
+                "name": "nodigest-3.0.0-py3-none-any.whl",
+                "browser_download_url": "https://github.com/o/r/releases/download/nodigest-v3.0.0/nodigest-3.0.0-py3-none-any.whl",
+            },
+        ],
+    }
+    projects = index.collect_projects(
+        [release],
+        hash_url=never_hash,
+        filters=Filters(exclude={"nodigest": ("3.0.0",)}),
+    )
+    assert projects == {}
+
+
+DUPLICATE_FILENAME_RELEASES = [
+    {
+        "tag_name": "first",
+        "assets": [
+            {
+                "name": "dupe-1.0.0-py3-none-any.whl",
+                "browser_download_url": "https://github.com/o/first/releases/download/first/dupe-1.0.0-py3-none-any.whl",
+                "digest": "sha256:aaaa",
+            },
+        ],
+    },
+    {
+        "tag_name": "second",
+        "assets": [
+            {
+                "name": "dupe-1.0.0-py3-none-any.whl",
+                "browser_download_url": "https://github.com/o/second/releases/download/second/dupe-1.0.0-py3-none-any.whl",
+                "digest": "sha256:aaaa",
+            },
+        ],
+    },
+]
+
+
+class ExcludeFirstOnly(Filters):
+    """Filters that exclude only the very first file they are asked about.
+
+    Two assets sharing a filename parse to the same project and version, so a
+    configured exclusion would drop both and no data-driven fixture can tell
+    "skipped before the ``seen`` bookkeeping" from "skipped after". This
+    stand-in makes the ordering observable: if the excluded file claimed the
+    filename slot, the second copy would be dropped as a duplicate.
+    """
+
+    def __init__(self):
+        super().__init__()
+        object.__setattr__(self, "calls", [])
+
+    def is_excluded(self, project, version):
+        self.calls.append((project, version))
+        return len(self.calls) == 1
+
+
+def test_excluded_file_does_not_claim_a_dedupe_slot(capsys):
+    filters = ExcludeFirstOnly()
+    projects = index.collect_projects(
+        DUPLICATE_FILENAME_RELEASES, hash_url=never_hash, filters=filters
+    )
+    assert filters.calls == [("dupe", "1.0.0"), ("dupe", "1.0.0")]
+    files = projects["dupe"]
+    assert len(files) == 1
+    assert "o/second" in files[0]["url"]  # the later copy filled the empty slot
+    assert "duplicate asset" not in capsys.readouterr().err
+
+
+def test_excluded_duplicates_warn_about_nothing(capsys):
+    projects = index.collect_projects(
+        DUPLICATE_FILENAME_RELEASES,
+        hash_url=never_hash,
+        filters=Filters(exclude={"dupe": ("1.0.0",)}),
+    )
+    assert projects == {}
+    assert capsys.readouterr().err == ""
+
+
+def test_collect_projects_yanks_with_a_reason():
+    projects = index.collect_projects(
+        FILTER_RELEASES,
+        hash_url=never_hash,
+        filters=Filters(yanked={"Yankee": {"1.0": "built from a dirty tree"}}),
+    )
+    yanked = {f["filename"]: f["yanked"] for f in projects["yankee"]}
+    assert yanked == {
+        "yankee-1.0.0-py3-none-any.whl": "built from a dirty tree",
+        "yankee-1.0.0.tar.gz": "built from a dirty tree",
+        "yankee-1.1.0-py3-none-any.whl": False,
+    }
+
+
+def test_collect_projects_yanks_without_a_reason():
+    projects = index.collect_projects(
+        FILTER_RELEASES,
+        hash_url=never_hash,
+        filters=Filters(yanked={"yankee": {"1.0.0": True}}),
+    )
+    entry = projects["yankee"][0]
+    assert entry["yanked"] is True
+    assert entry["sha256"] == "aaaa"  # otherwise processed normally
+
+
+def yanked_site(tmp_path, filters):
+    projects = index.collect_projects(
+        FILTER_RELEASES, hash_url=never_hash, filters=filters
+    )
+    index.write_site(projects, tmp_path, title="T", index_url=None)
+    page = (tmp_path / "simple" / "yankee" / "index.html").read_text()
+    data = json.loads((tmp_path / "simple" / "yankee" / "index.json").read_text())
+    return page, data
+
+
+def test_write_site_yanked_with_a_reason(tmp_path):
+    page, data = yanked_site(
+        tmp_path, Filters(yanked={"yankee": {"1.0.0": "bad sdist"}})
+    )
+    assert 'data-yanked="bad sdist"' in page
+    files = {f["filename"]: f for f in data["files"]}
+    assert files["yankee-1.0.0-py3-none-any.whl"]["yanked"] == "bad sdist"
+    assert files["yankee-1.0.0.tar.gz"]["yanked"] == "bad sdist"
+
+
+def test_write_site_yanked_without_a_reason(tmp_path):
+    page, data = yanked_site(tmp_path, Filters(yanked={"yankee": {"1.0.0": True}}))
+    assert 'data-yanked=""' in page
+    files = {f["filename"]: f for f in data["files"]}
+    assert files["yankee-1.0.0-py3-none-any.whl"]["yanked"] is True
+
+
+def test_write_site_yank_marks_only_the_yanked_version(tmp_path):
+    page, data = yanked_site(tmp_path, Filters(yanked={"yankee": {"1.0.0": True}}))
+    assert page.count("data-yanked") == 2  # the wheel and the sdist, not 1.1.0
+    files = {f["filename"]: f for f in data["files"]}
+    assert "yanked" not in files["yankee-1.1.0-py3-none-any.whl"]
+
+
+def test_write_site_not_yanked_emits_nothing(tmp_path):
+    page, data = yanked_site(tmp_path, Filters())
+    assert "data-yanked" not in page
+    assert all("yanked" not in file for file in data["files"])
+
+
+def test_write_site_yank_preserves_hash_and_metadata_attributes(tmp_path):
+    projects = index.collect_projects(
+        METADATA_RELEASE,
+        hash_url=never_hash,
+        filters=Filters(yanked={"hasmeta": {"8.0.0": "oops"}}),
+    )
+    index.write_site(projects, tmp_path, title="T", index_url=None)
+    page = (tmp_path / "simple" / "hasmeta" / "index.html").read_text()
+    assert "#sha256=aaaa" in page
+    assert 'data-dist-info-metadata="sha256=bbbb"' in page
+    assert 'data-core-metadata="sha256=bbbb"' in page
+    assert 'data-yanked="oops"' in page
+
+
+def test_yanked_version_still_listed_but_excluded_version_is_not(tmp_path):
+    _, yanked = yanked_site(tmp_path, Filters(yanked={"yankee": {"1.0.0": True}}))
+    assert yanked["versions"] == ["1.0.0", "1.1.0"]
+    _, excluded = yanked_site(tmp_path, Filters(exclude={"yankee": ("1.0.0",)}))
+    assert excluded["versions"] == ["1.1.0"]
+
+
+def test_write_site_yank_reason_is_html_escaped(tmp_path):
+    # the reason is config-controlled free text landing inside an attribute --
+    # pin the escaping so a stray |safe or a non-autoescaped template name
+    # cannot quietly turn it into attribute injection
+    reason = 'broke "everything" & <b>bold</b>'
+    page, data = yanked_site(tmp_path, Filters(yanked={"yankee": {"1.0.0": reason}}))
+    assert (
+        'data-yanked="broke &#34;everything&#34; &amp; &lt;b&gt;bold&lt;/b&gt;"' in page
+    )
+    assert "<b>bold</b>" not in page
+    files = {f["filename"]: f for f in data["files"]}
+    assert files["yankee-1.0.0-py3-none-any.whl"]["yanked"] == reason  # JSON is raw

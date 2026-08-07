@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from ghr_pypi.config import Config, ConfigError, load
+from ghr_pypi.config import Config, ConfigError, Filters, load
 
 
 def write(tmp_path: Path, text: str) -> Path:
@@ -102,6 +102,83 @@ def test_templates_relative_to_config_dir(tmp_path, monkeypatch):
             "repositories: [a/b]\nmirror: true\nmissing_digest: download\n",
             "'missing_digest' has no effect when 'mirror' is enabled",
         ),
+        ("repositories: [a/b]\nyanked: [1.0.0]\n", "'yanked' must be a mapping"),
+        ("repositories: [a/b]\nyanked: nope\n", "'yanked' must be a mapping"),
+        (
+            "repositories: [a/b]\nyanked:\n  1: {'1.0': true}\n",
+            "'yanked' project keys must be strings, got 1",
+        ),
+        (
+            "repositories: [a/b]\nyanked:\n  demo-lib: [1.0.0]\n",
+            "'yanked.demo-lib' must be a mapping of version to reason",
+        ),
+        (
+            "repositories: [a/b]\nyanked:\n  demo-lib: 1.0.0\n",
+            "'yanked.demo-lib' must be a mapping of version to reason",
+        ),
+        (
+            "repositories: [a/b]\nyanked:\n  demo-lib:\n    1.0: true\n",
+            "'yanked.demo-lib' version keys must be quoted strings, got 1.0",
+        ),
+        (
+            "repositories: [a/b]\nyanked:\n  demo-lib:\n    1: true\n",
+            "'yanked.demo-lib' version keys must be quoted strings, got 1",
+        ),
+        (
+            "repositories: [a/b]\nyanked:\n  demo-lib:\n    '1.0': false\n",
+            "'yanked.demo-lib.1.0' is false; remove the entry to un-yank",
+        ),
+        (
+            "repositories: [a/b]\nyanked:\n  demo-lib:\n    '1.0': ''\n",
+            "'yanked.demo-lib.1.0' has an empty reason; use true for a yank",
+        ),
+        (
+            "repositories: [a/b]\nyanked:\n  demo-lib:\n    '1.0': 3\n",
+            "'yanked.demo-lib.1.0' must be a reason string or true",
+        ),
+        (
+            "repositories: [a/b]\nyanked:\n  demo-lib:\n    '1.0': [why]\n",
+            "'yanked.demo-lib.1.0' must be a reason string or true",
+        ),
+        (
+            "repositories: [a/b]\nyanked:\n  demo-lib:\n    '1.0': a\n    '1.0.0': b\n",
+            "'yanked.demo-lib' has two entries for version '1.0.0'",
+        ),
+        (
+            "repositories: [a/b]\nyanked:\n"
+            "  Demo_Lib:\n    '1.0': true\n  demo-lib:\n    '2.0': true\n",
+            "'yanked' has two entries for project 'demo-lib'",
+        ),
+        ("repositories: [a/b]\nexclude: [1.0.0]\n", "'exclude' must be a mapping"),
+        ("repositories: [a/b]\nexclude: nope\n", "'exclude' must be a mapping"),
+        (
+            "repositories: [a/b]\nexclude:\n  1: ['1.0']\n",
+            "'exclude' project keys must be strings, got 1",
+        ),
+        (
+            "repositories: [a/b]\nexclude:\n  demo-lib: '1.0'\n",
+            "'exclude.demo-lib' must be a list of version strings",
+        ),
+        (
+            "repositories: [a/b]\nexclude:\n  demo-lib: {'1.0': true}\n",
+            "'exclude.demo-lib' must be a list of version strings",
+        ),
+        (
+            "repositories: [a/b]\nexclude:\n  demo-lib: [1.0]\n",
+            "'exclude.demo-lib' versions must be quoted strings, got 1.0",
+        ),
+        (
+            "repositories: [a/b]\nexclude:\n  demo-lib: [true]\n",
+            "'exclude.demo-lib' versions must be quoted strings, got True",
+        ),
+        (
+            "repositories: [a/b]\nexclude:\n  demo-lib: ['1.0', '1.0.0']\n",
+            "'exclude.demo-lib' has two entries for version '1.0.0'",
+        ),
+        (
+            "repositories: [a/b]\nexclude:\n  Demo.Lib: ['1.0']\n  demo-lib: ['2.0']\n",
+            "'exclude' has two entries for project 'demo-lib'",
+        ),
     ],
 )
 def test_load_errors(tmp_path, text, match):
@@ -162,6 +239,51 @@ def test_mirror_allows_missing_digest_when_off(tmp_path):
         write(tmp_path, "repositories: [a/b]\nmirror: false\nmissing_digest: omit\n")
     )
     assert cfg.mirror is False and cfg.missing_digest == "omit"
+
+
+def test_filters_default_to_empty(tmp_path):
+    cfg = load(write(tmp_path, "repositories: [a/b]\n"))
+    assert cfg.filters == Filters()
+    assert cfg.filters.yanked == {}
+    assert cfg.filters.exclude == {}
+
+
+def test_load_yanked_and_exclude(tmp_path):
+    cfg = load(
+        write(
+            tmp_path,
+            """
+repositories: [a/b]
+yanked:
+  Demo_Lib:
+    "1.0.0": sdist built from a dirty tree
+    "1.0.1": true
+  other-lib:
+    "2.0": true
+exclude:
+  Demo.Lib:
+    - "0.9.0"
+    - "0.9.1"
+""",
+        )
+    )
+    assert cfg.filters.yanked == {
+        "demo-lib": {"1.0.0": "sdist built from a dirty tree", "1.0.1": True},
+        "other-lib": {"2.0": True},
+    }
+    assert cfg.filters.exclude == {"demo-lib": ("0.9.0", "0.9.1")}
+    assert cfg.filters.yank_reason("demo-lib", "1.0.0") == (
+        "sdist built from a dirty tree"
+    )
+    assert cfg.filters.is_excluded("demo-lib", "0.9.1") is True
+
+
+def test_load_empty_yanked_and_exclude_mappings(tmp_path):
+    cfg = load(
+        write(tmp_path, "repositories: [a/b]\nyanked: {}\nexclude:\n  demo-lib: []\n")
+    )
+    assert cfg.filters.yanked == {}
+    assert cfg.filters.exclude == {"demo-lib": ()}
 
 
 def test_load_missing_file(tmp_path):

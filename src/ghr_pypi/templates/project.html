@@ -6,7 +6,7 @@
   </head>
   <body>
     {% block header %}<h1>Links for {{ project }}</h1>{% endblock %}
-{% block content %}{% for file in files %}{% set cm = ('sha256=' ~ file.core_metadata) if file.core_metadata is string else 'true' %}    <a href="{{ file.url }}{% if file.sha256 %}#sha256={{ file.sha256 }}{% endif %}"{% if file.core_metadata %} data-dist-info-metadata="{{ cm }}" data-core-metadata="{{ cm }}"{% endif %}>{{ file.filename }}</a><br/>
+{% block content %}{% for file in files %}{% set cm = ('sha256=' ~ file.core_metadata) if file.core_metadata is string else 'true' %}    <a href="{{ file.url }}{% if file.sha256 %}#sha256={{ file.sha256 }}{% endif %}"{% if file.core_metadata %} data-dist-info-metadata="{{ cm }}" data-core-metadata="{{ cm }}"{% endif %}{% if file.yanked %} data-yanked="{{ file.yanked if file.yanked is string else '' }}"{% endif %}>{{ file.filename }}</a><br/>
 {% endfor %}{% endblock %}    {% block footer %}{% endblock %}
   </body>
 </html>

@@ -56,7 +56,7 @@ What you can override
      - ``projects``
 
 Each entry in ``files`` carries ``filename``, ``url``, ``sha256`` (may be ``None``), ``size``,
-``upload_time``, and ``core_metadata``.
+``upload_time``, ``core_metadata``, and ``yanked``.
 
 Three things to keep in mind
 ============================
@@ -67,8 +67,9 @@ Three things to keep in mind
 * **``simple_root.html`` and ``project.html`` are machine-read.** Their bodies are the
   :pep:`503` anchor lists that installers parse. If you replace ``project.html`` wholesale
   rather than extending it, keep the built-in's ``{% if file.sha256 %}`` guard around the
-  ``#sha256=`` fragment and its ``data-core-metadata``/``data-dist-info-metadata`` attributes,
-  or you will publish links pip cannot verify and drop :pep:`658` metadata advertisements.
+  ``#sha256=`` fragment, its ``data-core-metadata``/``data-dist-info-metadata`` attributes, and
+  its ``data-yanked`` attribute, or you will publish links pip cannot verify, drop :pep:`658`
+  metadata advertisements, and silently un-yank :pep:`592` yanked releases.
 * **The JSON output is never templated.** Its shape is defined by :pep:`691`; overrides change
   the HTML only.
 

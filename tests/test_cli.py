@@ -1,8 +1,10 @@
+import json
+
 from typer.testing import CliRunner
 
 from ghr_pypi import index
 from ghr_pypi.cli import app
-from tests.test_index import FIXTURE_RELEASES
+from tests.test_index import FILTER_RELEASES, FIXTURE_RELEASES
 
 runner = CliRunner()
 
@@ -462,3 +464,37 @@ def test_cli_mirror_network_failure(tmp_path, monkeypatch):
     )
     assert result.exit_code == 1
     assert "downloading a release asset failed" in all_output(result)
+
+
+def test_cli_config_filters_flow_through(tmp_path, monkeypatch):
+    # end-to-end guard on the cli -> collect_projects wiring: without
+    # filters=cfg.filters the config's yanked/exclude blocks are inert
+    monkeypatch.setattr(index, "fetch_releases", fetch_stub(FILTER_RELEASES))
+
+    def never_hash(url):
+        raise AssertionError("hash_url called; every fixture asset has a digest")
+
+    monkeypatch.setattr(index, "hash_url", never_hash)
+    cfg = config_file(
+        tmp_path,
+        """
+repositories: [a/b]
+yanked:
+  Yankee:
+    "1.1.0": "bad wheel"
+exclude:
+  yankee:
+    - "1.0.0"
+""",
+    )
+    out = tmp_path / "site"
+    result = runner.invoke(
+        app, ["--config", str(cfg), "--out", str(out), "--token", "x"]
+    )
+    assert result.exit_code == 0, all_output(result)
+    page = (out / "simple" / "yankee" / "index.html").read_text()
+    assert 'data-yanked="bad wheel"' in page
+    assert "yankee-1.0.0" not in page  # the excluded version never reached the index
+    data = json.loads((out / "simple" / "yankee" / "index.json").read_text())
+    assert data["versions"] == ["1.1.0"]
+    assert data["files"][0]["yanked"] == "bad wheel"

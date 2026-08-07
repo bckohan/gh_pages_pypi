@@ -12,12 +12,12 @@ the two must be supplied — passing both, or neither, is an error (see :ref:`cl
 
 The configuration file is the only way to aggregate several repositories into one index, and
 the only way to set ``title``, ``url``, ``templates``, ``formats``, ``missing_digest``,
-``metadata``, or ``mirror`` from a file. The single-repository form supports ``--mirror`` and
-otherwise uses the defaults listed below, with ``title`` set to ``"<OWNER/NAME> package
-index"`` and ``url`` set to the repository's GitHub Pages URL
+``metadata``, ``mirror``, ``yanked``, or ``exclude``. The single-repository form supports
+``--mirror`` and otherwise uses the defaults listed below, with ``title`` set to
+``"<OWNER/NAME> package index"`` and ``url`` set to the repository's GitHub Pages URL
 (``https://<owner>.github.io/<name>/``).
 
-The file is read as YAML and its top level must be a mapping. Only the eight keys documented
+The file is read as YAML and its top level must be a mapping. Only the ten keys documented
 here are accepted; any other key aborts the build. Every value is validated before any network
 request is made, so a configuration mistake fails immediately and cheaply.
 
@@ -68,6 +68,14 @@ Summary
      - boolean
      - ``true``
      - :pep:`658` core metadata handling
+   * - :ref:`config-yanked`
+     - project → version → reason
+     - ``{}``
+     - :pep:`592` yanks; files stay in the index
+   * - :ref:`config-exclude`
+     - project → list of versions
+     - ``{}``
+     - Files never enter the index at all
 
 Keys
 ====
@@ -305,6 +313,97 @@ is advertised, and the coverage warnings are suppressed.
 
    metadata: false
 
+.. _config-yanked:
+
+``yanked``
+----------
+
+:Type: mapping of project name to a mapping of version to reason
+:Default: ``{}`` — nothing is yanked
+:Constraints: Must be a mapping. Project keys must be strings; version keys must be
+              **quoted** strings; each reason must be a non-empty string or ``true``.
+              ``false`` is rejected outright. Project keys are :pep:`503`-normalized, and
+              two keys that normalize to the same project — or two version keys that denote
+              the same release — are an error rather than a merge.
+
+Marks released files as yanked per :pep:`592`, without deleting anything from GitHub. A yank
+is a signal to installers that a release is defective and should not be selected for new
+resolutions, while remaining installable for anyone who asks for it by exact version.
+
+A yanked file is indexed exactly like any other. It keeps its anchor in
+``simple/<project>/index.html`` and its entry in ``simple/<project>/index.json``, its version
+still appears in the :pep:`700` ``versions`` list, and under :ref:`config-mirror` it is still
+downloaded and still has its :pep:`658` metadata extracted. The only difference is the marker:
+
+* **HTML** — the anchor gains ``data-yanked="<reason>"``, or ``data-yanked=""`` when the
+  reason is ``true``. The attribute is absent for files that are not yanked.
+* **JSON** — the file object gains ``"yanked": "<reason>"`` or ``"yanked": true``. The key is
+  absent for files that are not yanked.
+
+``pip`` and ``uv`` then skip the release during resolution unless the requirement pins that
+exact version (``==1.0.1``, or a lock file, or an equivalent constraint), in which case they
+install it and print the reason. Yanking therefore leaves existing pinned installs working;
+:ref:`config-exclude` does not.
+
+The reason string is free text and is shown to the user, so make it actionable — ``"broken
+sdist, use 1.0.2"`` beats ``"bad"``. Use ``true`` only when there is genuinely nothing to say.
+
+Versions are matched by :pep:`440` equivalence, not by string equality, so ``"1.0"`` in the
+config matches a file built as ``1.0.0`` and vice versa. Two caveats follow from that:
+
+* A local version is *not* equivalent to its public version — ``"1.0.0"`` does **not** match
+  ``1.0.0+local``. Write local versions out in full: ``"1.0.0+local"``.
+* A version string neither side can parse is compared literally, and a file whose version
+  cannot be read from its filename at all matches nothing.
+
+Every file of the matched version is yanked — wheel, sdist, and every wheel of every platform.
+Yanks are per project and version; there is no way to yank a single file of a release.
+
+.. code-block:: yaml
+
+   yanked:
+     demo-lib:
+       "1.0.1": broken sdist, use 1.0.2
+       "0.9": true              # yanked, no reason given
+     demo-app:
+       "2.0.0+local": superseded
+
+.. _config-exclude:
+
+``exclude``
+-----------
+
+:Type: mapping of project name to a list of version strings
+:Default: ``{}`` — nothing is excluded
+:Constraints: Must be a mapping. Project keys must be strings; each value must be a list of
+              **quoted** version strings. Project keys are :pep:`503`-normalized, and two
+              keys that normalize to the same project — or two versions in one list that
+              denote the same release — are an error rather than a merge.
+
+Drops the matched files from the build entirely. Unlike :ref:`config-yanked`, an excluded file
+is not marked, it is simply not there: no anchor, no JSON entry, no appearance in the
+:pep:`700` ``versions`` list, nothing mirrored, and no digest fetched or computed for it.
+Anything already pinned to that version stops resolving.
+
+Exclusion happens before the duplicate-filename bookkeeping, so an excluded file never claims
+a filename slot: if a later repository in :ref:`config-repositories` publishes the same
+filename, that copy is still indexed normally.
+
+Version matching is identical to :ref:`config-yanked` — :pep:`440` equivalence, with the same
+local-version and unparseable-version caveats.
+
+Reach for this when the release must not be installable by anyone: a leaked credential, a
+wrong-license artifact, an accidental upload. For a merely broken release, prefer ``yanked``.
+Excluding does not delete anything from GitHub; the assets stay public, and re-running the
+build without the entry brings them straight back.
+
+.. code-block:: yaml
+
+   exclude:
+     demo-lib:
+       - "0.1.0"
+       - "0.2.0"
+
 Validation errors
 =================
 
@@ -334,7 +433,7 @@ Validation runs in the order listed, so only the first problem is reported.
    **Fix:** make the top level ``key: value`` pairs, starting with ``repositories:``.
 
 ``{path}: unknown key(s): {names}``
-   **Cause:** the mapping contains keys outside the eight documented above; the sorted list
+   **Cause:** the mapping contains keys outside the ten documented above; the sorted list
    of offenders is included.
    **Fix:** remove or rename them. Typos such as ``repository:`` or ``mirrors:`` land here.
 
@@ -410,6 +509,82 @@ Validation runs in the order listed, so only the first problem is reported.
    **Cause:** ``metadata`` is present but did not parse as a YAML boolean.
    **Fix:** use an unquoted ``true`` or ``false``.
 
+``{path}: 'yanked' must be a mapping of project name to a mapping of version to reason``
+   **Cause:** ``yanked`` is present but is not a mapping — a list of versions is the usual
+   mistake.
+   **Fix:** nest it two deep, project first, then version.
+
+``{path}: 'yanked' project keys must be strings, got {project!r}``
+   **Cause:** a top-level key under ``yanked`` is not a string — an unquoted numeric or
+   date-like project name.
+   **Fix:** quote the project name.
+
+``{path}: 'yanked.{project}' must be a mapping of version to reason``
+   **Cause:** the value for a project is not a mapping — most often a plain list of versions,
+   which is the shape :ref:`config-exclude` wants, not this key.
+   **Fix:** give each version a reason, or ``true``.
+
+``{path}: 'yanked.{project}' version keys must be quoted strings, got {version!r}; write it as "{version}"``
+   **Cause:** a version key parsed as something other than a string. Unquoted ``1.0`` is a
+   YAML float and unquoted ``2`` is an int; both land here.
+   **Fix:** quote every version key — ``"1.0"``. The message echoes the quoted form to use.
+
+``{path}: 'yanked.{project}.{version}' is false; remove the entry to un-yank the version``
+   **Cause:** a reason of ``false``. There is no such thing as a negative yank: presence in
+   the mapping *is* the yank.
+   **Fix:** delete the entry. To keep it as a note to yourself, comment it out.
+
+``{path}: 'yanked.{project}.{version}' has an empty reason; use true for a yank with no reason``
+   **Cause:** the reason is an empty string. It would render as ``data-yanked=""``, which is
+   indistinguishable from a reasonless yank but arrived at by accident.
+   **Fix:** write ``true``, or supply a real reason.
+
+``{path}: 'yanked.{project}.{version}' must be a reason string or true, got {reason!r}``
+   **Cause:** the reason is neither a string nor ``true`` — a list, a mapping, a number, or
+   ``null`` from a version key written with nothing after the colon.
+   **Fix:** use a reason string, or ``true``.
+
+``{path}: 'yanked.{project}' has two entries for version {version!r}``
+   **Cause:** two version keys under one project denote the same release. Because matching is
+   by :pep:`440` equivalence, ``"1.0"`` and ``"1.0.0"`` collide even though YAML sees two
+   distinct keys.
+   **Fix:** keep one, with the reason you meant.
+
+``{path}: 'yanked' has two entries for project {normalized!r}``
+   **Cause:** two project keys normalize to the same name — ``Demo_Lib`` and ``demo-lib`` are
+   one project under :pep:`503`. The reported name is the normalized form.
+   **Fix:** merge the two mappings under a single key. They are not combined automatically,
+   deliberately: silently merging two spellings would hide a typo.
+
+``{path}: 'exclude' must be a mapping of project name to a list of versions``
+   **Cause:** ``exclude`` is present but is not a mapping — a bare list of versions, or a list
+   of filenames, is the usual mistake.
+   **Fix:** key it by project, with a list of versions under each.
+
+``{path}: 'exclude' project keys must be strings, got {project!r}``
+   **Cause:** a key under ``exclude`` is not a string.
+   **Fix:** quote the project name.
+
+``{path}: 'exclude.{project}' must be a list of version strings``
+   **Cause:** the value for a project is not a list — a mapping of version to reason is the
+   shape :ref:`config-yanked` wants, not this key.
+   **Fix:** use a YAML list. A single version still needs to be one: ``- "1.0.0"``.
+
+``{path}: 'exclude.{project}' versions must be quoted strings, got {version!r}; write it as "{version}"``
+   **Cause:** a list entry parsed as something other than a string — unquoted ``1.0`` is a
+   float, unquoted ``2`` an int.
+   **Fix:** quote every version. The message echoes the quoted form to use.
+
+``{path}: 'exclude.{project}' has two entries for version {version!r}``
+   **Cause:** two entries in one project's list denote the same release; as with ``yanked``,
+   ``"1.0"`` and ``"1.0.0"`` are the same release.
+   **Fix:** list each version once.
+
+``{path}: 'exclude' has two entries for project {normalized!r}``
+   **Cause:** two project keys normalize to the same name under :pep:`503`. The reported name
+   is the normalized form.
+   **Fix:** merge the two lists under a single key.
+
 Mirroring failures raise ``MirrorError`` rather than ``ConfigError``; they are described with
 the other runtime failures in :ref:`cli`.
 
@@ -448,6 +623,21 @@ served from a custom domain, with overridden templates and both output formats.
 
    # Optional. Extract and advertise PEP 658 core metadata. Default: true.
    metadata: true
+
+   # Optional. PEP 592 yanks, keyed by project then version. Version keys must
+   # be quoted; the reason is a string, or true for a yank with no reason.
+   # Yanked files stay in the index, marked; pinned installs keep working.
+   yanked:
+     lib-one:
+       "1.0.1": broken sdist, use 1.0.2
+       "0.9": true
+
+   # Optional. Versions dropped from the build entirely, keyed by project.
+   # Nothing is emitted for them and pinned installs stop resolving — use it
+   # when the release must not be installable at all.
+   exclude:
+     lib-two:
+       - "0.1.0"
 
    # NOTE: 'missing_digest' is deliberately absent — it is rejected whenever
    # 'mirror' is true. In link mode (mirror: false) it would be valid here:

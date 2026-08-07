@@ -93,6 +93,7 @@ def build(
             missing_digest=cfg.missing_digest,
             defer_hash=cfg.mirror,
             metadata=cfg.metadata,
+            filters=cfg.filters,
         )
     except urllib.error.URLError as error:
         typer.echo(f"error: downloading a release asset failed: {error}", err=True)

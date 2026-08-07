@@ -26,7 +26,7 @@ from jinja2 import (
 )
 from packaging.version import InvalidVersion, Version
 
-from ghr_pypi.config import Formats, MissingDigest
+from ghr_pypi.config import NO_FILTERS, Filters, Formats, MissingDigest
 
 API_ROOT = "https://api.github.com"
 
@@ -40,7 +40,8 @@ class FileEntry(TypedDict):
     the asset's API endpoint, used for authenticated mirror downloads; not
     emitted. ``core_metadata`` is the PEP 658 core metadata: its sha256, True
     when available unhashed, False when absent. ``source_repo`` is the
-    OWNER/NAME the entry came from, for diagnostics; not emitted.
+    OWNER/NAME the entry came from, for diagnostics; not emitted. ``yanked``
+    is the PEP 592 status: False when not yanked, else True or the reason.
     """
 
     filename: str
@@ -51,6 +52,7 @@ class FileEntry(TypedDict):
     api_url: str
     core_metadata: str | bool
     source_repo: str
+    yanked: str | bool
 
 
 Projects = dict[str, list[FileEntry]]
@@ -147,13 +149,14 @@ def collect_projects(
     missing_digest: MissingDigest = "download",
     defer_hash: bool = False,
     metadata: bool = True,
+    filters: Filters = NO_FILTERS,
 ) -> Projects:
     """Map normalized project names to their release files.
 
     Returns ``{project: [entry, ...]}`` sorted by project name and filename;
     each entry carries ``filename``, ``url``, ``sha256``, ``size``,
-    ``upload_time``, ``api_url``, ``core_metadata``, and ``source_repo``
-    (see :class:`FileEntry`). Assets that are not wheels or sdists are
+    ``upload_time``, ``api_url``, ``core_metadata``, ``source_repo``, and
+    ``yanked`` (see :class:`FileEntry`). Assets that are not wheels or sdists are
     ignored, as are draft releases (their assets aren't publicly
     downloadable). Duplicate filenames across releases are indexed once
     (first occurrence wins) with a stderr warning.
@@ -166,6 +169,11 @@ def collect_projects(
     a hash), ``omit`` (exclude with a warning). With ``defer_hash`` no hashing
     happens at all — sha256 is the API digest or None and ``missing_digest``
     does not apply (mirroring computes hashes from the downloaded bytes).
+
+    ``filters`` carries the configured yank and exclusion rules: excluded
+    files are dropped before anything else looks at them (so they never claim
+    a filename slot a later copy could fill), and yanked files are indexed
+    normally with their PEP 592 reason on ``yanked``.
     """
     projects: Projects = {}
     seen: set[str] = set()
@@ -192,6 +200,11 @@ def collect_projects(
                 continue
             project = project_name_from_filename(name)
             if project is None:
+                continue
+            version = version_from_filename(name)
+            # before the duplicate bookkeeping: an excluded file must not
+            # claim the filename slot another repository's copy could fill
+            if filters.is_excluded(project, version):
                 continue
             if name in seen:
                 print(
@@ -224,6 +237,7 @@ def collect_projects(
                     "api_url": asset.get("url") or "",
                     "core_metadata": core_metadata,
                     "source_repo": source_repo,
+                    "yanked": filters.yank_reason(project, version),
                 }
             )
     for files in projects.values():
@@ -423,6 +437,8 @@ def _json_project_page(project: str, files: list[FileEntry]) -> str:
             )
             entry["core-metadata"] = core
             entry["dist-info-metadata"] = core
+        if file["yanked"]:
+            entry["yanked"] = file["yanked"]
         entries.append(entry)
     return (
         json.dumps(
