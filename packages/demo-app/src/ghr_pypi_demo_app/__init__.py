@@ -1,10 +1,11 @@
 """Tiny CLI for the GitHub Pages PyPI demo."""
 
 import sys
+from importlib.metadata import version
 
 from ghr_pypi_demo_lib import greeting
 
-__version__ = "2026.8.6.1"
+__version__ = version("ghr-pypi-demo-app")
 
 
 def main(argv=None):

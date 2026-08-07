@@ -1,7 +1,7 @@
 [project]
 name = "ghr-pypi"
-version = "2026.8.6.1"
-description = "Serve a PyPI-compatible package index from GitHub Pages, built from GitHub release assets."
+dynamic = ["version"]
+description = "Tools for creating Python package indexes from GitHub release assets."
 requires-python = ">=3.10,<4.0"
 authors = [
   {name = "Brian Kohan", email = "bckohan@gmail.com"},
@@ -50,6 +50,11 @@ package = true
 [tool.uv.sources]
 ghr-pypi-demo-lib = { path = "packages/demo-lib", editable = true }
 ghr-pypi-demo-app = { path = "packages/demo-app", editable = true }
+
+[tool.hatch.version]
+source = "code"
+path = "src/ghr_pypi/_version.py"
+expression = "get_version()"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ghr_pypi"]

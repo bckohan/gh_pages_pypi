@@ -18,7 +18,7 @@ new plans and specs there rather than in `docs/` or `doc/`.
 
 ## What This Repo Is
 
-**ghr-pypi** — Serve a PyPI-compatible package index from GitHub Pages, built from GitHub release assets.
+**ghr-pypi** — Tools for creating Python package indexes from GitHub release assets.
 
 A Python library. Source lives in `src/ghr_pypi/`. Tests are in `tests/`. Documentation is in `doc/`.
 
@@ -65,11 +65,11 @@ just check-docs   # lint docs with doc8
 
 ### Release
 ```bash
-just release      # CalVer-stamp all packages, commit, sign tag vYYYY.M.D[.N], push to main
+just release      # verify, sign tag vYYYY.M.D[.N], push
 ```
-One tag ships everything: ghr-pypi to TestPyPI/PyPI plus a single
-GitHub Release containing all three packages' dists, which the Pages index
-serves.
+One tag ships everything: the tag is the version, hatchling stamps it into
+ghr-pypi and both demo packages at build time, and the workflow publishes to
+TestPyPI/PyPI plus a single GitHub Release that the Pages index serves.
 
 ## Test Strategy
 

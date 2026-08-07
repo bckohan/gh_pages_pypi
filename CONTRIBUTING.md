@@ -90,13 +90,17 @@ This will set a breakpoint at the start of the test.
 
 ## Versioning
 
-`ghr-pypi` uses [CalVer](https://calver.org): `YYYY.M.D`, with a
-`.N` serial suffix for repeat releases on the same day. The tool and the demo
-packages always share the release version.
+`ghr-pypi` uses [CalVer](https://calver.org): `YYYY.M.D`, with a `.N` serial
+suffix for repeat releases on the same day. Versions are **not** stored in
+any file — a signed git tag is the source of truth and the build stamps it
+into the artifacts. Working-tree builds report `YYYY.M.D.devN`; run
+`just print-version` to see the current version. Dev versions are not unique
+identifiers: the `devN` counter's basis changes once a tag lands that day, so
+the same commit can print a different `devN` before and after a release.
 
 ## Issuing Releases
 
-The release workflow is triggered by tag creation. You must have [git tag signing enabled](https://docs.github.com/en/authentication/managing-commit-signature-verification/signing-commits). Our justfile has a release shortcut — it must be run from a clean `main` checkout, and it runs the full check suite, stamps every package, commits, signs the tag, and pushes:
+The release workflow is triggered by tag creation. You must have [git tag signing enabled](https://docs.github.com/en/authentication/managing-commit-signature-verification/signing-commits). Our justfile has a release shortcut — it must be run from a clean `main` checkout, and it runs the full check suite, signs the tag, and pushes it (no files are edited and no release commit is made):
 
 ```sh
 just release
@@ -112,7 +116,7 @@ just
 
 ```sh
 bandit                       # run bandit static security analysis
-build                        # build docs and package
+build VERSION=""             # build docs and package at the current (or given) version
 build-docs                   # build the docs
 build-docs-html              # build html documentation
 check *ENV                   # run all static checks
@@ -146,12 +150,13 @@ install-uv                   # install the uv package manager
 lint *ENV                    # sort imports and fix linting issues
 open-docs                    # open the html documentation
 prek                         # run the pre-commit checks
-release                      # CalVer-release the repo: stamp all packages, test, commit, sign tag, push — triggers release.yml
+print-version                # print the version: the exact tag at HEAD, else YYYY.M.D.devN
+release                      # CalVer-release: verify, sign a tag and push it — triggers release.yml
 run +ARGS                    # run the command in the virtual environment
 setup python="python"        # setup the venv and pre-commit hooks
 sort-imports *ENV            # sort the python imports
 test *TESTS                  # run specific tests (project venv)
 test-all *ENV                # run all tests in an isolated environment (pass any uv run flags, e.g. -p 3.13)
-validate_version VERSION     # validate the given version tag against every package version site
+validate_version VERSION     # validate a version tag: PEP 440 normalized and matching the checked-out commit
 zizmor                       # run zizmor security analysis of CI
 ```

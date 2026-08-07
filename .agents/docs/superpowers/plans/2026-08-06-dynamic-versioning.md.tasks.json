@@ -1,0 +1,26 @@
+{
+  "planPath": ".agents/docs/superpowers/plans/2026-08-06-dynamic-versioning.md",
+  "tasks": [
+    {
+      "id": 0,
+      "subject": "Task 1: _version.py modules + dynamic pyprojects + runtime __version__",
+      "status": "completed",
+      "description": "**Goal:** build-time dynamic versions for all three packages.\n\n**Verify:** just test (129) + PACKAGE_VERSION build check\n\n```json:metadata\n{\"files\": [\"src/ghr_pypi/_version.py\", \"pyproject.toml\", \"packages/demo-lib/pyproject.toml\", \"packages/demo-app/pyproject.toml\", \"tests/test_version.py\"], \"verifyCommand\": \"just test\", \"acceptanceCriteria\": [\"env var stamps wheels\", \"no static literals\", \"lock has no version lines\", \"tests pass\"]}\n```"
+    },
+    {
+      "id": 1,
+      "subject": "Task 2: justfile print-version/build/validate_version/release",
+      "status": "completed",
+      "blockedBy": [0],
+      "description": "**Goal:** tags as version source; no stamping or release commit.\n\n**Verify:** just print-version && just test\n\n```json:metadata\n{\"files\": [\"justfile\"], \"verifyCommand\": \"just print-version && just test\", \"acceptanceCriteria\": [\"print-version forms\", \"build stamps\", \"validate_version checks HEAD\", \"_stamp-version gone\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 3: release.yml + docs + full gate",
+      "status": "completed",
+      "blockedBy": [1],
+      "description": "**Goal:** CI exports PACKAGE_VERSION; docs updated; gate green.\n\n**Verify:** just check-all\n\n```json:metadata\n{\"files\": [\".github/workflows/release.yml\", \"CONTRIBUTING.md\", \"AGENTS.md\", \"doc/source/changelog.rst\"], \"verifyCommand\": \"just check-all\", \"acceptanceCriteria\": [\"PACKAGE_VERSION exported\", \"docs updated\", \"gate green\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-08-06"
+}

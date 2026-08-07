@@ -50,7 +50,7 @@ ghr-pypi
         :alt: Lint Status
 
 
-Serve a PyPI-compatible package index from GitHub Pages, built from GitHub release assets.
+Tools for creating Python package indexes from GitHub release assets.
 
 .. toctree::
    :maxdepth: 2

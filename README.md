@@ -9,10 +9,10 @@
 [![Test Status](https://github.com/bckohan/ghr-pypi/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/bckohan/ghr-pypi/actions/workflows/test.yml?query=branch:main)
 [![Lint Status](https://github.com/bckohan/ghr-pypi/actions/workflows/lint.yml/badge.svg?branch=main)](https://github.com/bckohan/ghr-pypi/actions/workflows/lint.yml?query=branch:main)
 
-Serve a **PyPI-compatible package index from GitHub Pages**, built from
-**GitHub release assets**. No index server, nothing published to pypi.org —
-just static PEP 503 HTML and PEP 691 JSON, rebuilt automatically on every
-release.
+**Tools for creating Python package indexes from GitHub release assets.** No
+index server, nothing published to pypi.org — just static PEP 503 HTML and
+PEP 691 JSON, servable from GitHub Pages, a CDN or your own webserver, and
+rebuilt automatically on every release.
 
 This repository is both the tool and its own demo: the index at
 [bckohan.github.io/ghr-pypi](https://bckohan.github.io/ghr-pypi/)

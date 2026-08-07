@@ -7,7 +7,14 @@ build:
   jobs:
     post_install:
       - pip install uv
-      - UV_PROJECT_ENVIRONMENT=$READTHEDOCS_VIRTUALENV_PATH uv sync --all-extras --group docs --link-mode=copy
+      # Tag builds stamp the tag into the installed metadata that conf.py
+      # reads; a branch identifier (e.g. "main") is not a valid version and
+      # must not be exported.
+      - |
+        if [ "${READTHEDOCS_GIT_IDENTIFIER#v}" != "$READTHEDOCS_GIT_IDENTIFIER" ]; then
+          export PACKAGE_VERSION="${READTHEDOCS_GIT_IDENTIFIER#v}"
+        fi
+        UV_PROJECT_ENVIRONMENT=$READTHEDOCS_VIRTUALENV_PATH uv sync --all-extras --group docs --link-mode=copy
 
 sphinx:
   configuration: doc/source/conf.py

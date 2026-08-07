@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -8,7 +9,7 @@ import ghr_pypi
 project = ghr_pypi.__title__
 copyright = ghr_pypi.__copyright__
 author = ghr_pypi.__author__
-release = ghr_pypi.__version__
+release = os.environ.get("PACKAGE_VERSION") or ghr_pypi.__version__
 
 extensions = [
     "sphinx.ext.intersphinx",

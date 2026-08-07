@@ -9,11 +9,13 @@ r"""
    ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝    ╚═╝        ╚═╝   ╚═╝     ╚═╝
 
 
-Serve a PyPI-compatible package index from GitHub release assets.
+Tools for creating Python package indexes from GitHub release assets.
 """
 
+from importlib.metadata import version
+
 __title__ = "ghr-pypi"
-__version__ = "2026.8.6.1"
+__version__ = version("ghr-pypi")
 __author__ = "Brian Kohan"
 __license__ = "MIT"
 __copyright__ = "Copyright 2026 Brian Kohan"

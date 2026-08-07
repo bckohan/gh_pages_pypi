@@ -3,7 +3,7 @@
 Changelog
 =========
 
-2026.8.5
+2026.8.X
 --------
 
 * Initial release.
@@ -20,3 +20,5 @@ Changelog
   warnings.
 * Release workflow publishes each wheel's PEP 658 ``.metadata`` as a
   release asset.
+* Versions are computed at build time from git tags; no version strings are
+  stored in the repository.

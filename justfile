@@ -81,8 +81,16 @@ build-docs-html:
 # build the docs
 build-docs: build-docs-html
 
-# build docs and package
-build: build-docs-html
+# build docs and package at the current (or given) version
+build VERSION="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{ justfile_directory() }}"
+    version_arg="{{ VERSION }}"
+    export PACKAGE_VERSION="${version_arg:-${PACKAGE_VERSION:-$(just --quiet print-version)}}"
+    # load-bearing: export masks the command substitution's exit status
+    [ -n "$PACKAGE_VERSION" ] || { echo "error: could not determine version" >&2; exit 1; }
+    just build-docs-html
     uv build
 
 # open the html documentation
@@ -236,81 +244,58 @@ coverage:
 run +ARGS:
     uv run {{ ARGS }}
 
-# validate the given version tag against every package version site
+# print the version: the exact tag at HEAD, else YYYY.M.D.devN
+print-version:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{ justfile_directory() }}"
+
+    # A tagged HEAD reports its tag verbatim so the tag, the built wheel and any
+    # later print-version at that commit all agree. Only version tags are
+    # considered, so a stray non-version tag at HEAD cannot shadow the release
+    # tag. When more than one version tag points at HEAD, the highest version
+    # wins so the answer is deterministic.
+    exact_tag="$(git tag --points-at HEAD --sort=-v:refname 'v[0-9]*' | head -n1)"
+    if [ -n "$exact_tag" ]; then
+        echo "${exact_tag#v}"
+        exit 0
+    fi
+
+    date_part="$(date +%Y).$(date +%m | sed 's/^0//').$(date +%d | sed 's/^0//')"
+    today_iso="$(date +%Y-%m-%d)"
+
+    tag_today="$(
+      git for-each-ref --sort=-creatordate \
+        --format='%(refname:short) %(creatordate:short)' refs/tags \
+      | awk -v d="$today_iso" '$2==d { print $1; exit }'
+    )"
+
+    if [ -n "${tag_today:-}" ]; then
+        n_part="$(git rev-list --count "${tag_today}..HEAD")"
+    else
+        n_part="$(git rev-list --count --since='today 00:00' HEAD)"
+    fi
+
+    echo "${date_part}.dev${n_part}"
+
+# validate a version tag: PEP 440 normalized and matching the checked-out commit
 [script]
 validate_version VERSION:
-    import re
-    import tomllib
-    from pathlib import Path
+    import subprocess
     from packaging.version import Version
-    import ghr_pypi
     raw_version = "{{ VERSION }}".lstrip("v")
     version_obj = Version(raw_version)
     assert str(version_obj) == raw_version, f"unnormalized version: {raw_version}"
-    for pyproject in (
-        "pyproject.toml",
-        "packages/demo-lib/pyproject.toml",
-        "packages/demo-app/pyproject.toml",
-    ):
-        actual = tomllib.load(open(pyproject, "rb"))["project"]["version"]
-        assert actual == raw_version, f"{pyproject} has {actual}, expected {raw_version}"
-    assert ghr_pypi.__version__ == raw_version, (
-        f"ghr_pypi.__version__ is {ghr_pypi.__version__}, "
-        f"expected {raw_version}"
+    printed = subprocess.run(
+        ["just", "print-version"], capture_output=True, text=True, check=True
+    ).stdout.strip()
+    assert printed == raw_version, (
+        f"print-version reports {printed}, expected {raw_version}: "
+        "is HEAD at the tagged commit?"
     )
-    for init in (
-        "packages/demo-lib/src/ghr_pypi_demo_lib/__init__.py",
-        "packages/demo-app/src/ghr_pypi_demo_app/__init__.py",
-    ):
-        match = re.search(r'(?m)^__version__ = "(.*)"$', Path(init).read_text())
-        assert match, f"no __version__ line in {init}"
-        assert match.group(1) == raw_version, (
-            f"{init} has {match.group(1)}, expected {raw_version}"
-        )
     print(raw_version)
 
-# stamp today's CalVer (serial-suffixed if already tagged) into every version site
-[script]
-_stamp-version:
-    import re
-    import subprocess
-    import sys
-    from datetime import date
-    from pathlib import Path
-
-    VERSION_FILES = [
-        (Path("pyproject.toml"), r'(?m)^version = ".*"$', 'version = "{}"'),
-        (Path("packages/demo-lib/pyproject.toml"), r'(?m)^version = ".*"$', 'version = "{}"'),
-        (Path("packages/demo-app/pyproject.toml"), r'(?m)^version = ".*"$', 'version = "{}"'),
-        (Path("src/ghr_pypi/__init__.py"), r'(?m)^__version__ = ".*"$', '__version__ = "{}"'),
-        (Path("packages/demo-lib/src/ghr_pypi_demo_lib/__init__.py"), r'(?m)^__version__ = ".*"$', '__version__ = "{}"'),
-        (Path("packages/demo-app/src/ghr_pypi_demo_app/__init__.py"), r'(?m)^__version__ = ".*"$', '__version__ = "{}"'),
-    ]
-
-    today = date.today()
-    base = f"{today.year}.{today.month}.{today.day}"
-    tags = subprocess.run(
-        ["git", "tag", "--list", f"v{base}*"],
-        capture_output=True, text=True, check=True,
-    ).stdout.split()
-    version, serial = base, 0
-    while f"v{version}" in tags:
-        serial += 1
-        version = f"{base}.{serial}"
-
-    contents = []
-    for path, pattern, _ in VERSION_FILES:
-        text = path.read_text()
-        if not re.search(pattern, text):
-            sys.exit(f"error: no version line found in {path}")
-        contents.append(text)
-
-    for (path, pattern, template), text in zip(VERSION_FILES, contents):
-        path.write_text(re.sub(pattern, template.format(version), text, count=1))
-
-    print(version)
-
-# CalVer-release the repo: stamp all packages, test, commit, sign tag, push — triggers release.yml
+# CalVer-release: verify, sign a tag and push it — triggers release.yml
 release: install check-all
     #!/usr/bin/env bash
     set -euo pipefail
@@ -318,11 +303,23 @@ release: install check-all
     [ "$(git branch --show-current)" = "main" ] || { echo "error: release must run from main" >&2; exit 1; }
     [ -z "$(git status --porcelain)" ] || { echo "error: working tree not clean" >&2; exit 1; }
     git fetch --tags origin
-    version=$(just _stamp-version)
-    uv lock
+    git merge-base --is-ancestor HEAD origin/main || { echo "error: HEAD is not on origin/main; push first" >&2; exit 1; }
+    # same mechanism print-version uses, so the two always agree on "released"
+    existing="$(git tag --points-at HEAD 'v[0-9]*' | head -n1)"
+    if [ -n "$existing" ]; then
+        echo "error: HEAD is already released as ${existing}" >&2
+        exit 1
+    fi
+
+    base="$(date +%Y).$(date +%m | sed 's/^0//').$(date +%d | sed 's/^0//')"
+    version="$base"
+    serial=0
+    while git rev-parse -q --verify "refs/tags/v${version}" >/dev/null; do
+        serial=$((serial + 1))
+        version="${base}.${serial}"
+    done
+
     uv run --no-sync pytest tests/ -q
-    git add -u
-    git commit -m "Release ${version}"
     git tag -s "v${version}" -m "${version} Release"
-    git push --atomic origin main "v${version}"
+    git push origin "v${version}" || { git tag -d "v${version}"; exit 1; }
     echo "Released ${version} — watch it at: gh run watch"
