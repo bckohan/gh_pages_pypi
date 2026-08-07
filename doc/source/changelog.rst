@@ -3,6 +3,12 @@
 Changelog
 =========
 
+2026.8.X
+--------
+
+* Support yank/exclude.
+
+
 2026.8.6
 --------
 
