@@ -1,4 +1,5 @@
 import json
+import zipfile
 
 import pytest
 from typer.testing import CliRunner
@@ -41,7 +42,7 @@ def fetch_stub(releases):
 
 def test_cli_requires_token(tmp_path, monkeypatch):
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-    result = runner.invoke(app, ["bckohan/ghr-pypi", "--out", str(tmp_path)])
+    result = runner.invoke(app, ["index", "bckohan/ghr-pypi", "--out", str(tmp_path)])
     assert result.exit_code == 1
     assert "provide --token or set GITHUB_TOKEN" in all_output(result)
 
@@ -49,7 +50,7 @@ def test_cli_requires_token(tmp_path, monkeypatch):
 def test_cli_fails_with_no_packages(tmp_path, monkeypatch):
     monkeypatch.setattr(index, "fetch_releases", lambda repo, token: [])
     result = runner.invoke(
-        app, ["bckohan/ghr-pypi", "--out", str(tmp_path), "--token", "x"]
+        app, ["index", "bckohan/ghr-pypi", "--out", str(tmp_path), "--token", "x"]
     )
     assert result.exit_code == 1
     assert "no package assets" in all_output(result)
@@ -63,7 +64,7 @@ def test_cli_reports_api_failure(tmp_path, monkeypatch):
 
     monkeypatch.setattr(index, "fetch_releases", boom)
     result = runner.invoke(
-        app, ["bckohan/ghr-pypi", "--out", str(tmp_path), "--token", "x"]
+        app, ["index", "bckohan/ghr-pypi", "--out", str(tmp_path), "--token", "x"]
     )
     assert result.exit_code == 1
     assert "GitHub API request for bckohan/ghr-pypi failed" in all_output(result)
@@ -73,7 +74,7 @@ def test_cli_writes_site(tmp_path, monkeypatch):
     monkeypatch.setattr(index, "fetch_releases", fetch_stub(FIXTURE_RELEASES))
     monkeypatch.setattr(index, "hash_url", lambda url: "cafef00d")
     result = runner.invoke(
-        app, ["bckohan/ghr-pypi", "--out", str(tmp_path), "--token", "x"]
+        app, ["index", "bckohan/ghr-pypi", "--out", str(tmp_path), "--token", "x"]
     )
     assert result.exit_code == 0, all_output(result)
     assert "wrote index for 2 project(s)" in result.output
@@ -86,7 +87,9 @@ def test_cli_single_repository_advertises_the_index(tmp_path, monkeypatch):
     monkeypatch.setattr(index, "fetch_releases", fetch_stub(FIXTURE_RELEASES))
     monkeypatch.setattr(index, "hash_url", lambda url: "cafef00d")
     out = tmp_path / "site"
-    result = runner.invoke(app, ["bckohan/ghr-pypi", "--out", str(out), "--token", "x"])
+    result = runner.invoke(
+        app, ["index", "bckohan/ghr-pypi", "--out", str(out), "--token", "x"]
+    )
     assert result.exit_code == 0, all_output(result)
     landing = (out / "index.html").read_text()
     assert (
@@ -99,7 +102,7 @@ def test_cli_token_from_env(tmp_path, monkeypatch):
     monkeypatch.setenv("GITHUB_TOKEN", "x")
     monkeypatch.setattr(index, "fetch_releases", fetch_stub(FIXTURE_RELEASES))
     monkeypatch.setattr(index, "hash_url", lambda url: "cafef00d")
-    result = runner.invoke(app, ["bckohan/ghr-pypi", "--out", str(tmp_path)])
+    result = runner.invoke(app, ["index", "bckohan/ghr-pypi", "--out", str(tmp_path)])
     assert result.exit_code == 0, all_output(result)
     assert (tmp_path / "simple" / "index.html").exists()
 
@@ -229,7 +232,21 @@ def test_cli_defaults_repository_and_out(tmp_path, monkeypatch):
     monkeypatch.setenv("GITHUB_REPOSITORY", "bckohan/ghr-pypi")
     monkeypatch.setattr(index, "fetch_releases", fetch_stub(FIXTURE_RELEASES))
     monkeypatch.setattr(index, "hash_url", lambda url: "cafef00d")
-    result = runner.invoke(app, ["--token", "x"])
+    result = runner.invoke(app, ["index", "--token", "x"])
+    assert result.exit_code == 0, all_output(result)
+    assert (tmp_path / "_site" / "simple" / "index.html").exists()
+
+
+def test_cli_index_with_no_arguments_builds(tmp_path, monkeypatch):
+    # pins the exact argv the release workflow runs: `ghr-pypi index` and
+    # nothing else. Every other test passes at least one more argument, so
+    # only this one catches `index` being turned into a help-printing group.
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GITHUB_TOKEN", "x")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "bckohan/ghr-pypi")
+    monkeypatch.setattr(index, "fetch_releases", fetch_stub(FIXTURE_RELEASES))
+    monkeypatch.setattr(index, "hash_url", lambda url: "cafef00d")
+    result = runner.invoke(app, ["index"])
     assert result.exit_code == 0, all_output(result)
     assert (tmp_path / "_site" / "simple" / "index.html").exists()
 
@@ -267,7 +284,7 @@ title: Aggregated Index
     )
     out = tmp_path / "site"
     result = runner.invoke(
-        app, ["--config", str(cfg), "--out", str(out), "--token", "x"]
+        app, ["index", "--config", str(cfg), "--out", str(out), "--token", "x"]
     )
     assert result.exit_code == 0, all_output(result)
     assert "wrote index for 3 project(s)" in result.output
@@ -281,7 +298,7 @@ title: Aggregated Index
 def test_cli_config_error(tmp_path):
     cfg = config_file(tmp_path, "repositories: []\n")
     result = runner.invoke(
-        app, ["--config", str(cfg), "--out", str(tmp_path), "--token", "x"]
+        app, ["index", "--config", str(cfg), "--out", str(tmp_path), "--token", "x"]
     )
     assert result.exit_code == 1
     assert "'repositories' must be a non-empty list" in all_output(result)
@@ -301,14 +318,16 @@ def test_cli_config_url_failure_names_repo(tmp_path, monkeypatch):
         "repositories: [bckohan/ghr-pypi, someorg/other-project]\n",
     )
     result = runner.invoke(
-        app, ["--config", str(cfg), "--out", str(tmp_path), "--token", "x"]
+        app, ["index", "--config", str(cfg), "--out", str(tmp_path), "--token", "x"]
     )
     assert result.exit_code == 1
     assert "GitHub API request for someorg/other-project failed" in all_output(result)
 
 
 def test_cli_rejects_malformed_repo(tmp_path):
-    result = runner.invoke(app, ["foo", "--out", str(tmp_path), "--token", "x"])
+    result = runner.invoke(
+        app, ["index", "foo", "--out", str(tmp_path), "--token", "x"]
+    )
     assert result.exit_code == 1
     assert "is not OWNER/NAME" in all_output(result)
 
@@ -334,7 +353,7 @@ def test_cli_missing_digest_policy_flows_through(tmp_path, monkeypatch):
     cfg = config_file(tmp_path, "repositories: [a/b]\nmissing_digest: no-fragment\n")
     out = tmp_path / "site"
     result = runner.invoke(
-        app, ["--config", str(cfg), "--out", str(out), "--token", "x"]
+        app, ["index", "--config", str(cfg), "--out", str(out), "--token", "x"]
     )
     assert result.exit_code == 0, all_output(result)
     page = (out / "simple" / "legacy" / "index.html").read_text()
@@ -347,7 +366,7 @@ def test_cli_formats_json_only(tmp_path, monkeypatch):
     cfg = config_file(tmp_path, "repositories: [a/b]\nformats: [json]\n")
     out = tmp_path / "site"
     result = runner.invoke(
-        app, ["--config", str(cfg), "--out", str(out), "--token", "x"]
+        app, ["index", "--config", str(cfg), "--out", str(out), "--token", "x"]
     )
     assert result.exit_code == 0, all_output(result)
     assert (out / "simple" / "index.json").exists()
@@ -375,6 +394,7 @@ def test_cli_mirror_flag(tmp_path, monkeypatch):
     result = runner.invoke(
         app,
         [
+            "index",
             "bckohan/ghr-pypi",
             "--out",
             str(out),
@@ -393,7 +413,16 @@ def test_cli_mirror_with_config_errors(tmp_path):
     cfg = config_file(tmp_path, "repositories: [a/b]\n")
     result = runner.invoke(
         app,
-        ["--config", str(cfg), "--out", str(tmp_path), "--token", "x", "--mirror"],
+        [
+            "index",
+            "--config",
+            str(cfg),
+            "--out",
+            str(tmp_path),
+            "--token",
+            "x",
+            "--mirror",
+        ],
     )
     assert result.exit_code == 1
     assert "with --config, set 'mirror' in the config file" in all_output(result)
@@ -413,7 +442,8 @@ def test_cli_mirror_from_config(tmp_path, monkeypatch):
     monkeypatch.setattr(index, "mirror_files", fake_mirror)
     cfg = config_file(tmp_path, "repositories: [a/b]\nmirror: true\n")
     result = runner.invoke(
-        app, ["--config", str(cfg), "--out", str(tmp_path / "s"), "--token", "tok"]
+        app,
+        ["index", "--config", str(cfg), "--out", str(tmp_path / "s"), "--token", "tok"],
     )
     assert result.exit_code == 0, all_output(result)
     assert calls == ["tok"]
@@ -429,6 +459,7 @@ def test_cli_mirror_error_surfaces(tmp_path, monkeypatch):
     result = runner.invoke(
         app,
         [
+            "index",
             "bckohan/ghr-pypi",
             "--out",
             str(tmp_path),
@@ -452,7 +483,7 @@ def test_cli_reports_asset_download_failure(tmp_path, monkeypatch):
     monkeypatch.setattr(index, "hash_url", boom)
     result = runner.invoke(
         app,
-        ["bckohan/ghr-pypi", "--out", str(tmp_path), "--token", "x"],
+        ["index", "bckohan/ghr-pypi", "--out", str(tmp_path), "--token", "x"],
     )
     assert result.exit_code == 1
     assert "downloading a release asset failed" in all_output(result)
@@ -486,7 +517,8 @@ def test_cli_link_mode_metadata_warnings(tmp_path, monkeypatch):
     )
     cfg = config_file(tmp_path, "repositories: [a/covered, o/meta]\n")
     result = runner.invoke(
-        app, ["--config", str(cfg), "--out", str(tmp_path / "s"), "--token", "x"]
+        app,
+        ["index", "--config", str(cfg), "--out", str(tmp_path / "s"), "--token", "x"],
     )
     assert result.exit_code == 0, all_output(result)
     err = all_output(result)
@@ -501,7 +533,7 @@ def test_cli_metadata_false_silences_warnings(tmp_path, monkeypatch):
     cfg = config_file(tmp_path, "repositories: [o/meta]\nmetadata: false\n")
     out = tmp_path / "s"
     result = runner.invoke(
-        app, ["--config", str(cfg), "--out", str(out), "--token", "x"]
+        app, ["index", "--config", str(cfg), "--out", str(out), "--token", "x"]
     )
     assert result.exit_code == 0, all_output(result)
     assert "have no .metadata asset" not in all_output(result)
@@ -530,7 +562,7 @@ def test_cli_mirror_metadata_false_advertises_nothing(tmp_path, monkeypatch):
     )
     out = tmp_path / "s"
     result = runner.invoke(
-        app, ["--config", str(cfg), "--out", str(out), "--token", "x"]
+        app, ["index", "--config", str(cfg), "--out", str(out), "--token", "x"]
     )
     assert result.exit_code == 0, all_output(result)
     # a release-uploaded .metadata asset must NOT be advertised against the
@@ -559,7 +591,7 @@ def test_cli_mirror_runs_extraction(tmp_path, monkeypatch):
     out = tmp_path / "site"
     result = runner.invoke(
         app,
-        ["bckohan/ghr-pypi", "--out", str(out), "--token", "t", "--mirror"],
+        ["index", "bckohan/ghr-pypi", "--out", str(out), "--token", "t", "--mirror"],
     )
     assert result.exit_code == 0, all_output(result)
     assert extract_calls == [out]
@@ -578,7 +610,8 @@ def test_cli_mirror_metadata_false_skips_extraction(tmp_path, monkeypatch):
     )
     cfg = config_file(tmp_path, "repositories: [a/b]\nmirror: true\nmetadata: false\n")
     result = runner.invoke(
-        app, ["--config", str(cfg), "--out", str(tmp_path / "s"), "--token", "x"]
+        app,
+        ["index", "--config", str(cfg), "--out", str(tmp_path / "s"), "--token", "x"],
     )
     assert result.exit_code == 0, all_output(result)
     assert called == []
@@ -596,6 +629,7 @@ def test_cli_mirror_network_failure(tmp_path, monkeypatch):
     result = runner.invoke(
         app,
         [
+            "index",
             "bckohan/ghr-pypi",
             "--out",
             str(tmp_path),
@@ -631,7 +665,7 @@ exclude:
     )
     out = tmp_path / "site"
     result = runner.invoke(
-        app, ["--config", str(cfg), "--out", str(out), "--token", "x"]
+        app, ["index", "--config", str(cfg), "--out", str(out), "--token", "x"]
     )
     assert result.exit_code == 0, all_output(result)
     page = (out / "simple" / "yankee" / "index.html").read_text()
@@ -640,3 +674,121 @@ exclude:
     data = json.loads((out / "simple" / "yankee" / "index.json").read_text())
     assert data["versions"] == ["1.1.0"]
     assert data["files"][0]["yanked"] == "bad wheel"
+
+
+def make_wheel(path, name="demo", version="1.0", payload="Name: demo\n"):
+    wheel = path / f"{name}-{version}-py3-none-any.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        archive.writestr(f"{name}-{version}.dist-info/METADATA", payload)
+    return wheel
+
+
+def test_extract_meta_scans_a_directory(tmp_path):
+    make_wheel(tmp_path, "one", payload="Name: one\n")
+    make_wheel(tmp_path, "two", payload="Name: two\n")
+    result = runner.invoke(app, ["extract-meta", str(tmp_path)])
+    assert result.exit_code == 0, all_output(result)
+    assert (
+        tmp_path / "one-1.0-py3-none-any.whl.metadata"
+    ).read_bytes() == b"Name: one\n"
+    assert (
+        tmp_path / "two-1.0-py3-none-any.whl.metadata"
+    ).read_bytes() == b"Name: two\n"
+    assert "2 wheel(s)" in result.output
+
+
+def test_extract_meta_accepts_an_explicit_wheel(tmp_path):
+    wheel = make_wheel(tmp_path)
+    result = runner.invoke(app, ["extract-meta", str(wheel)])
+    assert result.exit_code == 0, all_output(result)
+    assert wheel.with_name(wheel.name + ".metadata").read_bytes() == b"Name: demo\n"
+
+
+def test_extract_meta_does_not_recurse(tmp_path):
+    make_wheel(tmp_path, "top")
+    nested = tmp_path / "nested"
+    nested.mkdir()
+    buried = make_wheel(nested, "buried")
+    result = runner.invoke(app, ["extract-meta", str(tmp_path)])
+    assert result.exit_code == 0, all_output(result)
+    assert not buried.with_name(buried.name + ".metadata").exists()
+
+
+def test_extract_meta_overwrites(tmp_path):
+    wheel = make_wheel(tmp_path)
+    sidecar = wheel.with_name(wheel.name + ".metadata")
+    sidecar.write_bytes(b"stale")
+    result = runner.invoke(app, ["extract-meta", str(wheel)])
+    assert result.exit_code == 0, all_output(result)
+    assert sidecar.read_bytes() == b"Name: demo\n"
+
+
+def test_extract_meta_rejects_a_missing_path(tmp_path):
+    missing = tmp_path / "absent"
+    result = runner.invoke(app, ["extract-meta", str(missing)])
+    assert result.exit_code == 1
+    assert f"{missing} does not exist" in all_output(result)
+
+
+def test_extract_meta_rejects_a_non_wheel(tmp_path):
+    other = tmp_path / "notes.txt"
+    other.write_text("hi")
+    result = runner.invoke(app, ["extract-meta", str(other)])
+    assert result.exit_code == 1
+    assert f"{other} is not a wheel" in all_output(result)
+
+
+def test_extract_meta_rejects_an_empty_directory(tmp_path):
+    result = runner.invoke(app, ["extract-meta", str(tmp_path)])
+    assert result.exit_code == 1
+    assert f"no wheels in {tmp_path}" in all_output(result)
+
+
+def test_extract_meta_rejects_an_unreadable_wheel(tmp_path):
+    wheel = tmp_path / "broken-1.0-py3-none-any.whl"
+    wheel.write_bytes(b"not a zip")
+    result = runner.invoke(app, ["extract-meta", str(wheel)])
+    assert result.exit_code == 1
+    assert "broken-1.0-py3-none-any.whl" in all_output(result)
+
+
+def test_extract_meta_requires_a_path():
+    result = runner.invoke(app, ["extract-meta"])
+    # exit 2 alone would also be satisfied by the command not existing at all
+    assert result.exit_code == 2
+    assert "Missing argument" in all_output(result)
+
+
+def test_extract_meta_deduplicates_paths(tmp_path):
+    make_wheel(tmp_path, "one")
+    result = runner.invoke(app, ["extract-meta", str(tmp_path), str(tmp_path)])
+    assert result.exit_code == 0, all_output(result)
+    assert "1 wheel(s)" in result.output
+
+
+def test_extract_meta_writes_nothing_when_a_later_wheel_is_unreadable(tmp_path):
+    good = make_wheel(tmp_path, "aaa")
+    broken = tmp_path / "zzz-1.0-py3-none-any.whl"
+    broken.write_bytes(b"not a zip")
+    result = runner.invoke(app, ["extract-meta", str(tmp_path)])
+    assert result.exit_code == 1
+    # all-or-nothing: the readable wheel sorts first but must not be written
+    assert not index.metadata_path(good).exists()
+
+
+def test_extract_meta_reports_an_unwritable_sidecar(tmp_path, monkeypatch):
+    wheel = make_wheel(tmp_path)
+
+    def boom(self, data):
+        raise OSError("Read-only file system")
+
+    monkeypatch.setattr("pathlib.Path.write_bytes", boom)
+    result = runner.invoke(app, ["extract-meta", str(wheel)])
+    assert result.exit_code == 1
+    assert f"cannot write {index.metadata_path(wheel)}" in all_output(result)
+
+
+def test_bare_invocation_prints_help():
+    result = runner.invoke(app, [])
+    assert result.exit_code != 0
+    assert "extract-meta" in all_output(result)

@@ -21,7 +21,7 @@ and turn on ``mirror`` if you want the packages served from there too.
 
 .. code-block:: sh
 
-   ghr-pypi --config index.yml --out site
+   ghr-pypi index --config index.yml --out site
 
 Set ``url`` explicitly rather than letting it default. Left unset in a config file it comes
 out empty — no install example at all — unless the build runs in GitHub Actions, where
@@ -54,7 +54,7 @@ Shipping the directory
 
 ``--delete`` in both: it is what removes projects and files that no longer exist. Cloudflare
 Pages, Netlify and similar services take the directory as a build output instead — point their
-build command at ``ghr-pypi`` and their output directory at ``site``.
+build command at ``ghr-pypi index`` and their output directory at ``site``.
 
 With ``mirror: true`` every link in the index is relative (``../../files/...``), so the site
 can be moved between hosts and prefixes without rebuilding. Without it, the index links back

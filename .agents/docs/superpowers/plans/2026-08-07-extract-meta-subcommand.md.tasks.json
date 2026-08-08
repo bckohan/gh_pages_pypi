@@ -1,0 +1,26 @@
+{
+  "planPath": ".agents/docs/superpowers/plans/2026-08-07-extract-meta-subcommand.md",
+  "tasks": [
+    {
+      "id": 0,
+      "subject": "Task 1: read_wheel_metadata helper",
+      "status": "completed",
+      "description": "**Goal:** one implementation of \"read a wheel's core METADATA\", used by the existing mirroring path.\n\n**Verify:** uv run pytest tests/test_index.py -q && just check-types\n\n```json:metadata\n{\"files\": [\"src/ghr_pypi/index.py\", \"tests/test_index.py\"], \"verifyCommand\": \"uv run pytest tests/test_index.py -q && just check-types\", \"acceptanceCriteria\": [\"returns METADATA bytes\", \"BadZipFile for non-zip, missing member, two members\", \"OSError for missing file\", \"extract_metadata behavior unchanged\"]}\n```"
+    },
+    {
+      "id": 1,
+      "subject": "Task 2: index and extract-meta subcommands",
+      "status": "completed",
+      "blockedBy": [0],
+      "description": "**Goal:** `ghr-pypi index` is today's command; `ghr-pypi extract-meta PATH...` writes .metadata sidecars; bare `ghr-pypi` prints help.\n\n**Verify:** just test\n\n```json:metadata\n{\"files\": [\"src/ghr_pypi/cli.py\", \"tests/test_cli.py\"], \"verifyCommand\": \"just test\", \"acceptanceCriteria\": [\"index behaves as before\", \"bare ghr-pypi prints help, exits non-zero\", \"paths and dirs, non-recursive\", \"sidecar written and overwritten\", \"five error cases exit 1\", \"no paths exits non-zero\", \"mutation-proven\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 3: workflow, docs, full gate",
+      "status": "completed",
+      "blockedBy": [1],
+      "description": "**Goal:** release workflow and every documented invocation use the subcommands; the heredoc is gone from both copies.\n\n**Verify:** just check-all\n\n```json:metadata\n{\"files\": [\".github/workflows/release.yml\", \".github/workflows/pages.yml\", \"README.md\", \"direction.md\", \"doc/source/reference/cli.rst\", \"doc/source/how-to/publish-metadata.rst\", \"doc/source/changelog.rst\"], \"verifyCommand\": \"just check-all\", \"acceptanceCriteria\": [\"release.yml uses extract-meta before sigstore\", \"no heredoc remains\", \"every invocation names a subcommand\", \"cli.rst documents both\", \"changelog records the break\", \"direction.md bullet removed\", \"just check-all exit 0\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-08-07"
+}

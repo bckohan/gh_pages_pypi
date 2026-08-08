@@ -31,13 +31,13 @@ workflow — the built-in ``github.token``.
 .. code-block:: sh
 
    export GITHUB_TOKEN=...
-   ghr-pypi --config index.yml --out site
+   ghr-pypi index --config index.yml --out site
 
 For a single repository the flag form is equivalent:
 
 .. code-block:: sh
 
-   ghr-pypi yourorg/private-lib --out site --mirror
+   ghr-pypi index yourorg/private-lib --out site --mirror
 
 but that form fixes the landing page's install example to the repository's GitHub Pages URL
 (``https://<owner>.github.io/<name>/``). If the index is hosted anywhere else, use a config

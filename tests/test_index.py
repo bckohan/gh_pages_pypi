@@ -813,6 +813,58 @@ def test_extract_metadata_failure_ladder(tmp_path, capsys, payload, paired, erro
     ).exists()
 
 
+def test_read_wheel_metadata_returns_the_payload(tmp_path):
+    wheel = tmp_path / "demo-1.0-py3-none-any.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        archive.writestr("demo-1.0.dist-info/METADATA", "Name: demo\n")
+    assert index.read_wheel_metadata(wheel) == b"Name: demo\n"
+
+
+def test_read_wheel_metadata_rejects_a_non_zip(tmp_path):
+    wheel = tmp_path / "demo-1.0-py3-none-any.whl"
+    wheel.write_bytes(b"not a zip")
+    with pytest.raises(zipfile.BadZipFile):
+        index.read_wheel_metadata(wheel)
+
+
+def test_read_wheel_metadata_rejects_a_wheel_without_metadata(tmp_path):
+    wheel = tmp_path / "demo-1.0-py3-none-any.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        archive.writestr("demo/__init__.py", "")
+    with pytest.raises(zipfile.BadZipFile):
+        index.read_wheel_metadata(wheel)
+
+
+def test_read_wheel_metadata_rejects_two_metadata_members(tmp_path):
+    wheel = tmp_path / "demo-1.0-py3-none-any.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        archive.writestr("demo-1.0.dist-info/METADATA", "Name: demo\n")
+        archive.writestr("other-1.0.dist-info/METADATA", "Name: other\n")
+    with pytest.raises(zipfile.BadZipFile):
+        index.read_wheel_metadata(wheel)
+
+
+def test_read_wheel_metadata_rejects_a_missing_file(tmp_path):
+    with pytest.raises(OSError):
+        index.read_wheel_metadata(tmp_path / "absent.whl")
+
+
+def test_read_wheel_metadata_rejects_a_nested_metadata_member(tmp_path):
+    wheel = tmp_path / "demo-1.0-py3-none-any.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        archive.writestr("sub/demo-1.0.dist-info/METADATA", "Name: demo\n")
+    with pytest.raises(zipfile.BadZipFile):
+        index.read_wheel_metadata(wheel)
+
+
+def test_read_wheel_metadata_ignores_a_nested_decoy(tmp_path):
+    wheel = tmp_path / "demo-1.0-py3-none-any.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        archive.writestr("demo-1.0.dist-info/METADATA", "Name: demo\n")
+        archive.writestr("sub/demo-1.0.dist-info/METADATA", "Name: decoy\n")
+    assert index.read_wheel_metadata(wheel) == b"Name: demo\n"
+
+
 def test_metadata_true_renders_boolean(tmp_path):
     projects = index.collect_projects(METADATA_RELEASE, hash_url=never_hash)
     index.write_site(projects, tmp_path, title="T", index_url=None)

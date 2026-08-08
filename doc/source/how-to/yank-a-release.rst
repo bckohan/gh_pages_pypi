@@ -22,7 +22,7 @@ learn that it is defective.
 
 .. code-block:: sh
 
-   ghr-pypi --config index.yml --out site
+   ghr-pypi index --config index.yml --out site
 
 The yank takes effect on the *next* build, so make sure the build runs and the deploy replaces
 the old files — editing the config does nothing on its own. If your Pages workflow only

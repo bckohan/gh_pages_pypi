@@ -11,7 +11,7 @@ Reproduce it locally in seconds, where the warnings are easier to see than in a 
 
 .. code-block:: sh
 
-   GITHUB_TOKEN=$(gh auth token) uvx ghr-pypi yourorg/yourrepo --out /tmp/site
+   GITHUB_TOKEN=$(gh auth token) uvx ghr-pypi index yourorg/yourrepo --out /tmp/site
 
 "No package assets found"
 =========================

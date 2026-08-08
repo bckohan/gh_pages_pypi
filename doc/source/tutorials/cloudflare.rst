@@ -92,7 +92,7 @@ deployed. Give it a script to run. Create ``build.sh`` in the project root:
    # Cloudflare's build image has no uv; fetch it, then run ghr-pypi with it
    # without installing anything permanently.
    curl -LsSf https://astral.sh/uv/install.sh | sh
-   "$HOME/.local/bin/uvx" ghr-pypi "$REPO" --out site --mirror
+   "$HOME/.local/bin/uvx" ghr-pypi index "$REPO" --out site --mirror
 
    # _headers only takes effect from the root of the published directory.
    cp _headers site/

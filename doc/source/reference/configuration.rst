@@ -28,7 +28,7 @@ request is made, so a configuration mistake fails immediately and cheaply.
 
 .. code-block:: sh
 
-   ghr-pypi --config index.yml --out site
+   ghr-pypi index --config index.yml --out site
 
 Summary
 =======
@@ -615,7 +615,7 @@ served from a custom domain, with overridden templates and both output formats.
 
 .. code-block:: yaml
 
-   # index.yml — passed as: ghr-pypi --config index.yml --out site
+   # index.yml — passed as: ghr-pypi index --config index.yml --out site
 
    # Optional. Releases from these repositories are aggregated, in order.
    # On a filename collision the first repository listed wins. Omit the key to

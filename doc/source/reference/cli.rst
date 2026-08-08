@@ -6,24 +6,28 @@
 Command Line Interface
 ======================
 
-``ghr-pypi`` is a single command. It reads the releases of one or more GitHub repositories,
-collects their wheel and sdist assets, and writes a :pep:`503` package index into a directory
-of your choosing. It never starts a server and never writes anything outside ``--out``.
+``ghr-pypi`` has two commands. ``index`` reads the releases of one or more GitHub
+repositories, collects their wheel and sdist assets, and writes a :pep:`503` package index
+into a directory of your choosing; it never starts a server and never writes anything
+outside ``--out``. ``extract-meta`` writes a wheel's :pep:`658` core metadata to a
+``.metadata`` file beside it, for upload as a release asset. Running ``ghr-pypi`` with no
+command prints help and exits 2.
 
 Synopsis
 ========
 
 .. code-block:: text
 
-   ghr-pypi [REPO]... [--out DIRECTORY] [--config PATH] [--token TOKEN] [--mirror]
+   ghr-pypi index [REPO]... [--out DIRECTORY] [--config PATH] [--token TOKEN] [--mirror]
+   ghr-pypi extract-meta PATH...
 
 The package installs the ``ghr-pypi`` console script. It can equally be run without
 installing:
 
 .. code-block:: sh
 
-   uvx ghr-pypi
-   python -m pip install ghr-pypi && ghr-pypi yourorg/yourrepo --out site
+   uvx ghr-pypi index
+   python -m pip install ghr-pypi && ghr-pypi index yourorg/yourrepo --out site
 
 Reference
 =========
@@ -31,9 +35,10 @@ Reference
 .. typer:: ghr_pypi.cli:app
    :prog: ghr-pypi
    :width: 80
+   :show-nested:
 
-Invocation forms
-================
+``index`` invocation forms
+==========================
 
 Repositories are named in one of two places: the ``repositories`` key of a
 ``--config`` file, or the positional ``REPO`` arguments. The two may not be
@@ -44,15 +49,15 @@ it is consulted only when neither the file nor the command line names one, so it
 never conflicts with what you typed; GitHub Actions sets it for every step,
 which is why it has to be harmless next to a config file. It still has two other
 effects whenever it is set — it supplies the index URL (see
-:ref:`cli-url-derivation`) and it is validated eagerly. If nothing names a
-repository, the command exits 1.
+:ref:`the URL derivation rules <cli-url-derivation>`) and it is validated
+eagerly. If nothing names a repository, the command exits 1.
 
 No arguments
 ------------
 
 .. code-block:: sh
 
-   ghr-pypi
+   ghr-pypi index
 
 Inside GitHub Actions this is the whole invocation: ``GITHUB_REPOSITORY`` names
 the repository being built and ``--out`` defaults to ``_site``, which is also
@@ -66,8 +71,8 @@ One or more repositories
 
 .. code-block:: sh
 
-   ghr-pypi yourorg/yourrepo --out site
-   ghr-pypi yourorg/lib-one yourorg/lib-two --out site
+   ghr-pypi index yourorg/yourrepo --out site
+   ghr-pypi index yourorg/lib-one yourorg/lib-two --out site
 
 Each argument is a bare ``OWNER/NAME`` slug — not a URL, not a clone path.
 Repeating one, ignoring case, is an error.
@@ -98,7 +103,7 @@ Configuration file
 
 .. code-block:: sh
 
-   ghr-pypi --config index.yml --out site
+   ghr-pypi index --config index.yml --out site
 
 Required for indexing more than one repository from a fixed list, and the only
 way to set ``title``, ``url``, ``templates``, ``formats``, ``missing_digest``,
@@ -122,8 +127,8 @@ Pages URL is used in **both** forms — including alongside a config file that
 omits ``url`` — because the repository running the build is the host. Set
 ``url`` explicitly whenever the site is served from anywhere else.
 
-Options
-=======
+``index`` options
+=================
 
 ``--out DIRECTORY``
    Where the site is written. Defaults to ``_site``, matching
@@ -155,11 +160,12 @@ Options
    linking to GitHub. Command line form only — with ``--config``, set ``mirror: true`` in the
    file. See :ref:`config-mirror` for the full behavior.
 
-``GITHUB_TOKEN``
-================
+``index`` and ``GITHUB_TOKEN``
+==============================
 
 ``--token`` reads its default from the ``GITHUB_TOKEN`` environment variable, so the token
-never has to appear in a command line or a process listing.
+never has to appear in a command line or a process listing. ``extract-meta`` reads no token;
+it never talks to GitHub.
 
 Inside GitHub Actions the automatically provided ``github.token`` is sufficient for the
 repository the workflow runs in:
@@ -169,7 +175,7 @@ repository the workflow runs in:
    - name: Build the package index
      env:
        GITHUB_TOKEN: ${{ github.token }}
-     run: uvx ghr-pypi
+     run: uvx ghr-pypi index
 
 For repositories other than the one running the workflow — that is, for any aggregating
 configuration — ``github.token`` is not enough. Use a fine-grained personal access token or a
@@ -181,6 +187,64 @@ secret:
    env:
      GITHUB_TOKEN: ${{ secrets.INDEX_TOKEN }}
 
+.. _cli-extract-meta:
+
+``extract-meta``
+================
+
+.. code-block:: sh
+
+   ghr-pypi extract-meta dist/
+   ghr-pypi extract-meta dist/demo-1.0-py3-none-any.whl
+
+Writes each wheel's :pep:`658` core metadata to ``<wheel>.metadata`` beside the
+wheel, overwriting any existing file, and prints one line per wheel followed by
+a count. Each ``PATH`` is either a wheel or a directory; a directory is scanned
+for ``*.whl`` **without recursing**. Repeated paths are processed once. A
+directory scan passes over sdists — core metadata comes from the wheel — but an
+sdist named explicitly on the command line is an error, not a no-op.
+
+Every payload is read before any file is written, so a wheel that cannot be read
+fails before a single sidecar exists. The write phase is not rolled back: if a
+sidecar cannot be written, the ones already written stay on disk.
+
+This exists for release workflows. The index can only advertise metadata that
+lives at the wheel's own URL plus ``.metadata``, so in link mode the sidecar has
+to be uploaded as an asset of the same release as its wheel — see
+:ref:`howto-publish-metadata`.
+
+Every ``extract-meta`` exit-1 condition
+---------------------------------------
+
+Nothing is skipped with a warning — a release that silently ships no metadata is
+the failure this command prevents.
+
+``error: <path> does not exist``
+   A ``PATH`` names nothing on disk. Every ``PATH`` is resolved before any wheel
+   is opened, so this fires before anything is read.
+
+``error: <path> is not a wheel``
+   A ``PATH`` exists and is not a directory, but does not end in ``.whl``. An
+   sdist passed explicitly lands here.
+
+``error: no wheels in <path>``
+   A ``PATH`` is a directory whose top level contains no ``*.whl``. The scan
+   does not recurse, so wheels in a subdirectory do not count.
+
+``error: cannot extract metadata from <wheel>: <reason>``
+   The wheel could not be read. ``<reason>`` is ``File is not a zip file`` for
+   something that is not a wheel at all, ``no unique .dist-info/METADATA
+   member`` for a zip carrying zero or more than one top-level
+   ``*.dist-info/METADATA``, and the operating system's message for a wheel
+   found by a directory scan that cannot be opened. An unreadable path named
+   explicitly is rejected earlier, with exit 2. Raised during the read phase,
+   so no sidecar has been written yet.
+
+``error: cannot write <path>: <reason>``
+   A sidecar could not be written — an unwritable directory, a full disk, a
+   ``.metadata`` path that is itself a directory. This is the one failure that
+   can leave earlier sidecars behind; the count line is not printed.
+
 Exit codes
 ==========
 
@@ -191,20 +255,25 @@ Exit codes
    * - Code
      - Meaning
    * - ``0``
-     - The index was written. The command prints ``wrote index for N project(s) to <out>``
-       on stdout.
+     - The command did its work. ``index`` prints ``wrote index for N project(s) to
+       <out>``; ``extract-meta`` prints one ``wrote <path>`` line per wheel followed by
+       ``extracted metadata from N wheel(s)``. Both write to stdout.
    * - ``1``
-     - The build failed. A single line beginning with ``error:`` is printed on stderr and
-       nothing is deployed.
+     - The command failed. A single line beginning with ``error:`` is printed on stderr.
+       ``index`` writes no site, so nothing is deployed. ``extract-meta`` has written no
+       sidecars if the failure was a read; if a write failed, the sidecars written before
+       it remain.
    * - ``2``
-     - Command line usage error, raised by the argument parser before the build starts —
-       an unknown option, a missing option value, an unparseable value. Usage text is
-       printed.
+     - Command line usage error, raised by the argument parser before any work starts — an
+       unknown or missing command, a missing required argument, an unknown option, a
+       missing option value, an unparseable value. Bare ``ghr-pypi`` and ``extract-meta``
+       with no ``PATH`` both land here. Usage text is printed.
 
-Every exit-1 condition
-----------------------
+Every ``index`` exit-1 condition
+--------------------------------
 
 The checks below run in this order; the first one that fails ends the run.
+``extract-meta``'s failures are listed under :ref:`cli-extract-meta` above.
 
 ``error: provide --token or set GITHUB_TOKEN``
    No token was supplied, or the supplied value was empty. Checked before anything else is
@@ -267,14 +336,16 @@ The checks below run in this order; the first one that fails ends the run.
    does not match advertised digest ...``. The partially written file is removed and any
    previously mirrored copy is left intact.
 
-Warnings
---------
+``index`` warnings
+------------------
 
 Diagnostics that do **not** fail the build are printed on stderr and start with ``warning:``:
 duplicate filenames across repositories, assets skipped for unsafe names, assets omitted
 under ``missing_digest: omit``, wheels whose core metadata could not be extracted, and the
 per-repository :pep:`658` metadata coverage report. They are worth reading in CI logs — an
 index can be published successfully and still be missing what you expected.
+
+``extract-meta`` emits no warnings at all; every problem it detects is fatal.
 
 Examples
 ========
@@ -285,7 +356,7 @@ Index one repository for GitHub Pages
 .. code-block:: sh
 
    export GITHUB_TOKEN=ghp_...
-   ghr-pypi yourorg/yourrepo --out site
+   ghr-pypi index yourorg/yourrepo --out site
    # wrote index for 2 project(s) to site
 
 Serve ``site/`` at ``https://yourorg.github.io/yourrepo/`` and install from it:
@@ -308,7 +379,7 @@ Aggregate several repositories
 
 .. code-block:: sh
 
-   GITHUB_TOKEN="$INDEX_TOKEN" ghr-pypi --config index.yml --out site
+   GITHUB_TOKEN="$INDEX_TOKEN" ghr-pypi index --config index.yml --out site
 
 The token must be able to read every listed repository; a workflow's built-in
 ``github.token`` cannot.
@@ -318,7 +389,7 @@ Index a private repository
 
 .. code-block:: sh
 
-   ghr-pypi yourorg/private-repo --out site --token "$GITHUB_TOKEN" --mirror
+   ghr-pypi index yourorg/private-repo --out site --token "$GITHUB_TOKEN" --mirror
 
 ``--mirror`` downloads each asset through GitHub's authenticated asset API into
 ``site/files/`` and links to those copies, because direct release-asset links to a private
@@ -341,9 +412,22 @@ Emit the JSON API only
 
 .. code-block:: sh
 
-   ghr-pypi --config json-only.yml --out site
+   ghr-pypi index --config json-only.yml --out site
 
 Writes ``site/simple/index.json`` and ``site/simple/<project>/index.json`` and nothing else —
 no landing page, no HTML. Useful when a webserver in front of the files performs
 ``Accept``-header content negotiation, or when the index is consumed only by tools that speak
 :pep:`691`.
+
+Annotate a release with :pep:`658` metadata
+-------------------------------------------
+
+.. code-block:: sh
+
+   ghr-pypi extract-meta dist/
+   # wrote dist/yourpackage-1.0-py3-none-any.whl.metadata
+   # extracted metadata from 1 wheel(s)
+   gh release upload "$GITHUB_REF_NAME" dist/*.whl.metadata
+
+The sidecar has to reach the same release as its wheel; see
+:ref:`howto-publish-metadata` for the workflow this belongs in.

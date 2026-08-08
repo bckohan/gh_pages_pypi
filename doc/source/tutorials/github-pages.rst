@@ -180,7 +180,7 @@ Create ``.github/workflows/pages.yml``:
          - name: Build the package index
            env:
              GITHUB_TOKEN: ${{ github.token }}
-           run: uvx ghr-pypi
+           run: uvx ghr-pypi index
 
          - uses: actions/configure-pages@v6
 
@@ -201,24 +201,25 @@ Create ``.github/workflows/pages.yml``:
 
 Four things about this file are worth noticing.
 
-The build step passes no arguments at all. ``ghr-pypi`` takes the repository to index from
+The build step passes ``index`` and nothing else. ``index`` takes the repository to index from
 ``GITHUB_REPOSITORY``, which Actions sets for every step, and writes the site to ``_site`` —
 which is also the directory ``actions/upload-pages-artifact`` uploads when it is given no
-``path``. Naming either one explicitly (``ghr-pypi "$GITHUB_REPOSITORY" --out site``, with a
-matching ``path: site``) still works and is what you would do outside Actions.
+``path``. Naming either one explicitly
+(``ghr-pypi index "$GITHUB_REPOSITORY" --out site``, with a matching ``path: site``) still
+works and is what you would do outside Actions.
 
 The build job never checks the repository out. It does not need to: ``ghr-pypi`` reads the
 releases through GitHub's API, so the only inputs are the repository name and a token.
 
-``GITHUB_TOKEN`` is the workflow's own automatically provided token. ``ghr-pypi`` always
-requires a token, even for a public repository, because unauthenticated API requests are rate
-limited far too aggressively to build an index with. ``contents: read`` is all it needs for
-the repository the workflow runs in. See `automatic token authentication
+``GITHUB_TOKEN`` is the workflow's own automatically provided token. ``ghr-pypi index``
+always requires a token, even for a public repository, because unauthenticated API requests
+are rate limited far too aggressively to build an index with. ``contents: read`` is all it
+needs for the repository the workflow runs in. See `automatic token authentication
 <https://docs.github.com/en/actions/tutorials/authenticate-with-github_token>`_.
 
 The workflow only runs on a release or on an explicit dispatch. It deliberately does not run
-on every push, because ``ghr-pypi`` refuses to write an empty index — a run before your first
-release would fail.
+on every push, because ``ghr-pypi index`` refuses to write an empty index — a run before your
+first release would fail.
 
 Step 4 — Push the repository to GitHub
 ======================================

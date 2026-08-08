@@ -349,6 +349,29 @@ def mirror_files(
             entry["url"] = relative_url
 
 
+def read_wheel_metadata(path: Path) -> bytes:
+    """Return a wheel's :pep:`658` core metadata.
+
+    Reads the single top-level ``*.dist-info/METADATA`` member. Raises
+    ``OSError`` when the file cannot be read and ``zipfile.BadZipFile`` when it
+    is not a valid zip or does not carry exactly one such member.
+    """
+    with zipfile.ZipFile(path) as archive:
+        members = [
+            member
+            for member in archive.namelist()
+            if member.endswith(".dist-info/METADATA") and member.count("/") == 1
+        ]
+        if len(members) != 1:
+            raise zipfile.BadZipFile("no unique .dist-info/METADATA member")
+        return archive.read(members[0])
+
+
+def metadata_path(wheel: Path) -> Path:
+    """Return the :pep:`658` sidecar path for a wheel."""
+    return wheel.with_name(wheel.name + ".metadata")
+
+
 def extract_metadata(projects: Projects, out_dir: Path) -> None:
     """Extract PEP 658 core metadata from mirrored wheels.
 
@@ -363,16 +386,7 @@ def extract_metadata(projects: Projects, out_dir: Path) -> None:
                 continue
             wheel = out_dir / "files" / project / entry["filename"]
             try:
-                with zipfile.ZipFile(wheel) as archive:
-                    members = [
-                        member
-                        for member in archive.namelist()
-                        if member.endswith(".dist-info/METADATA")
-                        and member.count("/") == 1
-                    ]
-                    if len(members) != 1:
-                        raise zipfile.BadZipFile("no unique .dist-info/METADATA member")
-                    payload = archive.read(members[0])
+                payload = read_wheel_metadata(wheel)
             except (OSError, zipfile.BadZipFile) as error:
                 print(
                     f"warning: cannot extract metadata from "
@@ -381,7 +395,7 @@ def extract_metadata(projects: Projects, out_dir: Path) -> None:
                 )
                 entry["core_metadata"] = False
                 continue
-            wheel.with_name(wheel.name + ".metadata").write_bytes(payload)
+            metadata_path(wheel).write_bytes(payload)
             entry["core_metadata"] = hashlib.sha256(payload).hexdigest()
 
 

@@ -139,7 +139,7 @@ The ``gh`` CLI already has one:
 .. code-block:: sh
 
    export GITHUB_TOKEN=$(gh auth token)
-   uvx ghr-pypi --config index.yml --out site
+   uvx ghr-pypi index --config index.yml --out site
 
 It finishes with::
 
@@ -505,7 +505,7 @@ A package index you run: a directory of static files, mirrored from GitHub relea
 verified by sha256 on the way in, served over TLS by nginx with long-lived caching on the
 immutable files, short-lived caching on the index, pre-compressed transfers, real :pep:`691`
 content negotiation, and a password on the door. Rebuilding it is two commands — ``uvx
-ghr-pypi --config index.yml --out site`` and the ``rsync`` — which is a shape that drops
+ghr-pypi index --config index.yml --out site`` and the ``rsync`` — which is a shape that drops
 straight into a cron job or a CI workflow.
 
 Where to go next

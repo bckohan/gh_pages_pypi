@@ -35,10 +35,15 @@ uvx ghr-pypi --help
 ## Usage
 
 ```bash
-ghr-pypi [OWNER/REPO...] [--out DIRECTORY] [--token TOKEN]
+ghr-pypi index [OWNER/REPO...] [--out DIRECTORY] [--token TOKEN]
+ghr-pypi extract-meta PATH...
 ```
 
-Reads every (non-draft) release of each `OWNER/REPO` via the GitHub API
+`index` builds the package index; `extract-meta` writes a wheel's PEP 658
+core metadata beside it for upload as a release asset (see "Dependency
+metadata" below). Bare `ghr-pypi` prints help and exits non-zero.
+
+`index` reads every (non-draft) release of each `OWNER/REPO` via the GitHub API
 (`--token` defaults to `$GITHUB_TOKEN`), collects the wheel/sdist assets,
 takes each file's `sha256` from the API's asset digest (downloading and
 hashing only files that lack one), and writes a static
@@ -53,7 +58,7 @@ _site/simple/**/index.json        → PEP 691 JSON Simple API (see below)
 ```
 
 With no repository argument it indexes `$GITHUB_REPOSITORY`, so inside a
-GitHub Actions workflow `ghr-pypi` on its own is the whole command.
+GitHub Actions workflow `ghr-pypi index` on its own is the whole command.
 
 It refuses to build an empty index (non-zero exit) so a misconfigured CI run
 can never deploy a blank package index.
@@ -71,12 +76,12 @@ can never deploy a blank package index.
    - name: Build the package index
      env:
        GITHUB_TOKEN: ${{ github.token }}
-     run: uvx ghr-pypi
+     run: uvx ghr-pypi index
    - uses: actions/upload-pages-artifact@v5
    ```
 
-   With no arguments it indexes `$GITHUB_REPOSITORY` into `_site`, which is
-   also what `upload-pages-artifact` uploads by default.
+   With no further arguments `index` builds `$GITHUB_REPOSITORY` into
+   `_site`, which is also what `upload-pages-artifact` uploads by default.
 
    See [`pages.yml`](https://github.com/bckohan/ghr-pypi/blob/main/.github/workflows/pages.yml) for the full workflow
    (triggers, permissions, deploy job). Note: releases created by workflows
@@ -113,7 +118,7 @@ exclude:                                # optional — versions dropped from the
 ```
 
 ```sh
-ghr-pypi --config index.yml --out site
+ghr-pypi index --config index.yml --out site
 ```
 
 Any wheel or sdist attached to any (non-draft) release on any configured
@@ -164,7 +169,7 @@ resulting site can be served behind whatever auth your host provides
 repo's assets would not be fetchable by pip.
 
 ```sh
-ghr-pypi yourorg/private-repo --out site --token $TOKEN --mirror
+ghr-pypi index yourorg/private-repo --out site --token $TOKEN --mirror
 ```
 
 When the mirrored site will be hosted somewhere other than GitHub Pages,
@@ -212,21 +217,14 @@ uv in particular resolves dramatically faster against large indexes.
 
       warning: yourorg/lib-one: 3 of 4 wheels have no .metadata asset; ...
 
-  To publish metadata assets from your release workflow, extract each
-  wheel's `METADATA` and upload it next to the wheel (see the
-  "Extract PEP 658 metadata from wheels" step in
+  To publish metadata assets from your release workflow, run
+  `ghr-pypi extract-meta` over your built wheels and upload the sidecars
+  next to them (see the "Extract PEP 658 metadata from wheels" step in
   [`release.yml`](https://github.com/bckohan/ghr-pypi/blob/main/.github/workflows/release.yml) for the full version):
 
+      - uses: astral-sh/setup-uv@v5
       - name: Extract PEP 658 metadata
-        run: |
-          python3 -c "
-          import pathlib, zipfile
-          for w in pathlib.Path('dist').glob('*.whl'):
-              m = [n for n in zipfile.ZipFile(w).namelist()
-                   if n.endswith('.dist-info/METADATA') and n.count('/') == 1]
-              w.with_name(w.name + '.metadata').write_bytes(
-                  zipfile.ZipFile(w).read(m[0]))
-          "
+        run: uvx ghr-pypi extract-meta dist/
       - run: gh release upload "$GITHUB_REF_NAME" dist/*.whl.metadata
 
 Set `metadata: false` to disable extraction, advertising, and warnings.

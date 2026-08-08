@@ -41,13 +41,13 @@ jobs:
 
       # Runs the ghr-pypi CLI from this repo's own source — the repo
       # dogfoods the tool it publishes. Other repos would use:
-      #   uvx ghr-pypi
-      # With no arguments it indexes $GITHUB_REPOSITORY into _site, which is
-      # also upload-pages-artifact's default path.
+      #   uvx ghr-pypi index
+      # With no repository argument `index` builds $GITHUB_REPOSITORY into
+      # _site, which is also upload-pages-artifact's default path.
       - name: Build the package index
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: uv run --locked --no-default-groups ghr-pypi
+        run: uv run --locked --no-default-groups ghr-pypi index
 
       # Fails fast with a clear error if Pages isn't enabled for this repo.
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0

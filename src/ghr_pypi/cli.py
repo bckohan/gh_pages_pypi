@@ -2,6 +2,7 @@
 
 import os
 import urllib.error
+import zipfile
 from dataclasses import replace
 from pathlib import Path
 from typing import Annotated
@@ -11,7 +12,7 @@ import typer
 from ghr_pypi import index
 from ghr_pypi.config import Config, ConfigError, check_slug, load
 
-app = typer.Typer(add_completion=False)
+app = typer.Typer(add_completion=False, no_args_is_help=True)
 
 
 def _resolve_config(
@@ -83,8 +84,8 @@ def _resolve_config(
     return replace(cfg, repositories=repositories, url=url)
 
 
-@app.command()
-def build(
+@app.command("index")
+def build_index(
     repos: Annotated[
         list[str] | None,
         typer.Argument(
@@ -194,3 +195,59 @@ def build(
         formats=cfg.formats,
     )
     typer.echo(f"wrote index for {len(projects)} project(s) to {out}")
+
+
+@app.command("extract-meta")
+def extract_meta(
+    paths: Annotated[
+        list[Path],
+        typer.Argument(
+            metavar="PATH...",
+            help="Wheels, or directories to scan (non-recursively) for *.whl",
+        ),
+    ],
+) -> None:
+    """Write each wheel's PEP 658 core metadata to <wheel>.metadata.
+
+    Upload the sidecars alongside their wheels in the same release: the index
+    can only advertise metadata that lives at the wheel's own URL plus
+    .metadata.
+    """
+    wheels: list[Path] = []
+    for path in paths:
+        if not path.exists():
+            typer.echo(f"error: {path} does not exist", err=True)
+            raise typer.Exit(1)
+        if path.is_dir():
+            found = sorted(path.glob("*.whl"))
+            if not found:
+                typer.echo(f"error: no wheels in {path}", err=True)
+                raise typer.Exit(1)
+            wheels.extend(found)
+        elif path.suffix == ".whl":
+            wheels.append(path)
+        else:
+            typer.echo(f"error: {path} is not a wheel", err=True)
+            raise typer.Exit(1)
+    wheels = list(dict.fromkeys(wheels))
+    # read everything before writing anything: either every sidecar lands or
+    # none does, so a failure never leaves a release half-annotated
+    payloads: list[tuple[Path, bytes]] = []
+    for wheel in wheels:
+        try:
+            payloads.append(
+                (index.metadata_path(wheel), index.read_wheel_metadata(wheel))
+            )
+        except (OSError, zipfile.BadZipFile) as error:
+            typer.echo(
+                f"error: cannot extract metadata from {wheel}: {error}", err=True
+            )
+            raise typer.Exit(1) from error
+    for target, payload in payloads:
+        try:
+            target.write_bytes(payload)
+        except OSError as error:
+            typer.echo(f"error: cannot write {target}: {error}", err=True)
+            raise typer.Exit(1) from error
+        typer.echo(f"wrote {target}")
+    typer.echo(f"extracted metadata from {len(wheels)} wheel(s)")

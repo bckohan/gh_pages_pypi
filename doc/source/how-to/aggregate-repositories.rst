@@ -12,8 +12,8 @@ list in version control alongside the settings an aggregate index needs: ``title
 ``templates``, ``formats``, ``missing_digest``, ``metadata``, ``yanked`` and ``exclude``.
 
 For a one-off build there is a quicker route: the positional argument takes as many
-repositories as you like, so ``ghr-pypi yourorg/lib-one yourorg/lib-two --out site`` aggregates
-them with no file at all. What you give up is everything above — the title falls back to
+repositories as you like, so ``ghr-pypi index yourorg/lib-one yourorg/lib-two --out site``
+aggregates them with no file at all. What you give up is everything above — the title falls back to
 ``Package index``, and the landing page gets an install example only when
 ``$GITHUB_REPOSITORY`` is set. Reach for the config file as soon as the index is something you
 publish rather than something you inspect.
@@ -30,7 +30,7 @@ publish rather than something you inspect.
 
 .. code-block:: sh
 
-   ghr-pypi --config index.yml --out site
+   ghr-pypi index --config index.yml --out site
 
 Every wheel and sdist attached to every non-draft release of every listed repository ends up
 in one flat index, keyed by :pep:`503`-normalized project name. Two repositories publishing
@@ -49,7 +49,7 @@ installation token with **Contents: Read-only** on each repository, stored as a 
    - name: Build the package index
      env:
        GITHUB_TOKEN: ${{ secrets.INDEX_TOKEN }}
-     run: uvx ghr-pypi --config index.yml --out site
+     run: uvx ghr-pypi index --config index.yml --out site
 
 The build reads one page of releases per repository, so the config file is usually checked
 into a small dedicated "index" repository whose Pages site (or CDN project) serves the result.

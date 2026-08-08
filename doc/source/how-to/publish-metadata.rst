@@ -27,28 +27,18 @@ before the release is created:
 
 .. code-block:: yaml
 
-   - name: Extract PEP 658 metadata from wheels
-     run: |
-       python3 - <<'EOF'
-       import pathlib
-       import zipfile
+   - uses: astral-sh/setup-uv@v9
 
-       for wheel in pathlib.Path("dist").glob("*.whl"):
-           with zipfile.ZipFile(wheel) as archive:
-               members = [
-                   member
-                   for member in archive.namelist()
-                   if member.endswith(".dist-info/METADATA") and member.count("/") == 1
-               ]
-               if len(members) != 1:
-                   raise SystemExit(f"{wheel.name}: no unique .dist-info/METADATA member")
-               wheel.with_name(wheel.name + ".metadata").write_bytes(archive.read(members[0]))
-       EOF
+   - name: Extract PEP 658 metadata from wheels
+     run: uvx ghr-pypi extract-meta dist/
 
    - name: Upload the wheels, sdists and metadata
      env:
        GH_TOKEN: ${{ github.token }}
      run: gh release create "$GITHUB_REF_NAME" dist/* --generate-notes
+
+``extract-meta`` writes ``<wheel>.metadata`` beside each wheel in ``dist/``. A wheel it
+cannot read fails the job before any sidecar is written. See :ref:`cli` for the rest.
 
 The name must match exactly, and the pairing is done **per release** — a ``.metadata`` asset
 uploaded to a different release than its wheel is ignored, because advertising it would point
