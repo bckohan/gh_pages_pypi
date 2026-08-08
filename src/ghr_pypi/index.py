@@ -10,6 +10,7 @@ import hashlib
 import json
 import re
 import sys
+import urllib.error
 import urllib.request
 import zipfile
 from collections.abc import Callable
@@ -103,19 +104,80 @@ def version_from_filename(filename: str) -> str | None:
     return None
 
 
-def fetch_releases(repo: str, token: str) -> list[dict[str, Any]]:
-    """Return the JSON list of releases for the ``owner/name`` repository."""
-    request = urllib.request.Request(
-        f"{API_ROOT}/repos/{repo}/releases?per_page=100",
-        headers={
-            "Accept": "application/vnd.github+json",
-            "Authorization": f"Bearer {token}",
-        },
+class PaginationError(Exception):
+    """Raised when a paginated GitHub endpoint never returns a short page."""
+
+
+_PER_PAGE = 100
+_MAX_PAGES = 100
+
+
+def _paginate(
+    url: str,
+    token: str,
+    *,
+    opener: Callable[..., Any] = urllib.request.urlopen,
+) -> list[dict[str, Any]]:
+    """Return every item of a paginated GitHub list endpoint.
+
+    Requests pages of ``_PER_PAGE`` until one comes back short. The
+    ``_MAX_PAGES`` cap exists because a server that always returns a full page
+    would otherwise spin forever; hitting it raises rather than silently
+    truncating, since a short index is worse than a failed build.
+    """
+    if not url.startswith("https://"):
+        raise ValueError(f"refusing to fetch non-https URL: {url}")
+    items: list[dict[str, Any]] = []
+    for page in range(1, _MAX_PAGES + 1):
+        request = urllib.request.Request(
+            f"{url}?per_page={_PER_PAGE}&page={page}",
+            headers={
+                "Accept": "application/vnd.github+json",
+                "Authorization": f"Bearer {token}",
+            },
+        )
+        with opener(  # nosec B310 — scheme validated above
+            request, timeout=30
+        ) as response:
+            batch = json.load(response)
+        items.extend(batch)
+        if len(batch) < _PER_PAGE:
+            return items
+    raise PaginationError(
+        f"{url}: more than {_MAX_PAGES * _PER_PAGE} items; refusing to page further"
     )
-    with urllib.request.urlopen(  # nosec B310 — https URL built from constant API_ROOT
-        request, timeout=30
-    ) as response:
-        return json.load(response)
+
+
+def fetch_releases(
+    repo: str,
+    token: str,
+    *,
+    opener: Callable[..., Any] = urllib.request.urlopen,
+) -> list[dict[str, Any]]:
+    """Return the JSON list of every release for the ``owner/name`` repository."""
+    return _paginate(f"{API_ROOT}/repos/{repo}/releases", token, opener=opener)
+
+
+def fetch_repositories(
+    owner: str,
+    token: str,
+    *,
+    opener: Callable[..., Any] = urllib.request.urlopen,
+) -> list[str]:
+    """Return every ``owner/name`` repository the token can read.
+
+    Tries the organization endpoint and falls back to the user endpoint on 404.
+    The user endpoint lists only *public* repositories — GitHub has no endpoint
+    for another account's private ones — so private repositories on a personal
+    account have to be listed explicitly.
+    """
+    try:
+        payload = _paginate(f"{API_ROOT}/orgs/{owner}/repos", token, opener=opener)
+    except urllib.error.HTTPError as error:
+        if error.code != 404:
+            raise
+        payload = _paginate(f"{API_ROOT}/users/{owner}/repos", token, opener=opener)
+    return [repo["full_name"] for repo in payload]
 
 
 def hash_url(url: str) -> str:

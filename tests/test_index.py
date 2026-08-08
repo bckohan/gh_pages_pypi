@@ -1,6 +1,7 @@
 import hashlib
 import io
 import json
+import urllib.error
 import zipfile
 
 import pytest
@@ -50,6 +51,114 @@ FIXTURE_RELEASES = [
 
 def fake_hash(url):
     return "cafef00d"
+
+
+def paged_opener(*pages):
+    """Fake opener serving JSON pages in order.
+
+    Records each call's URL, full request (for headers), and timeout so
+    tests can assert on what was actually sent, not just how many calls
+    happened.
+    """
+    urls = []
+    requests = []
+    timeouts = []
+
+    def opener(request, timeout=None):
+        page = len(urls)
+        assert page < len(pages), (
+            f"paged_opener requested page {page + 1} but only "
+            f"{len(pages)} page(s) were supplied"
+        )
+        urls.append(request.full_url)
+        requests.append(request)
+        timeouts.append(timeout)
+        return io.BytesIO(json.dumps(pages[page]).encode())
+
+    opener.urls = urls
+    opener.requests = requests
+    opener.timeouts = timeouts
+    return opener
+
+
+def test_paginate_single_short_page():
+    opener = paged_opener([{"n": 1}, {"n": 2}])
+    assert index._paginate("https://api.example/x", "tok", opener=opener) == [
+        {"n": 1},
+        {"n": 2},
+    ]
+    assert opener.urls == ["https://api.example/x?per_page=100&page=1"]
+    assert opener.requests[0].get_header("Authorization") == "Bearer tok"
+    assert opener.requests[0].get_header("Accept") == "application/vnd.github+json"
+    assert opener.timeouts == [30]
+
+
+def test_paginate_full_page_then_short():
+    first = [{"n": i} for i in range(100)]
+    opener = paged_opener(first, [{"n": 100}])
+    assert index._paginate("https://api.example/x", "tok", opener=opener) == first + [
+        {"n": 100}
+    ]
+    assert opener.urls[-1].endswith("page=2")
+
+
+def test_paginate_full_page_then_empty():
+    first = [{"n": i} for i in range(100)]
+    opener = paged_opener(first, [])
+    assert index._paginate("https://api.example/x", "tok", opener=opener) == first
+    assert len(opener.urls) == 2
+
+
+def test_paginate_refuses_to_loop_forever():
+    full = [{"n": i} for i in range(100)]
+    opener = paged_opener(*([full] * 200))
+    with pytest.raises(index.PaginationError, match="more than 10000 items"):
+        index._paginate("https://api.example/x", "tok", opener=opener)
+    assert len(opener.urls) == 100  # pins the cap's value, not just its existence
+
+
+def test_paginate_rejects_non_https():
+    with pytest.raises(ValueError, match="non-https"):
+        index._paginate("http://api.example/x", "tok", opener=paged_opener())
+
+
+def test_fetch_releases_reads_every_page():
+    first = [{"tag_name": f"v{i}", "assets": []} for i in range(100)]
+    opener = paged_opener(first, [{"tag_name": "v100", "assets": []}])
+    releases = index.fetch_releases("a/b", "tok", opener=opener)
+    assert len(releases) == 101
+    assert releases[-1]["tag_name"] == "v100"
+    assert opener.urls[0].startswith(f"{index.API_ROOT}/repos/a/b/releases?")
+
+
+def test_fetch_repositories_lists_an_org():
+    opener = paged_opener([{"full_name": "org/one"}, {"full_name": "org/two"}])
+    assert index.fetch_repositories("org", "tok", opener=opener) == [
+        "org/one",
+        "org/two",
+    ]
+    assert "/orgs/org/repos" in opener.urls[0]
+
+
+def test_fetch_repositories_falls_back_to_a_user():
+    calls = []
+
+    def opener(request, timeout=None):
+        calls.append(request.full_url)
+        if "/orgs/" in request.full_url:
+            raise urllib.error.HTTPError(request.full_url, 404, "nope", {}, None)
+        return io.BytesIO(json.dumps([{"full_name": "someone/pkg"}]).encode())
+
+    assert index.fetch_repositories("someone", "tok", opener=opener) == ["someone/pkg"]
+    assert "/users/someone/repos" in calls[-1]
+
+
+def test_fetch_repositories_reraises_other_http_errors():
+    def opener(request, timeout=None):
+        raise urllib.error.HTTPError(request.full_url, 403, "forbidden", {}, None)
+
+    with pytest.raises(urllib.error.HTTPError):
+        index.fetch_repositories("org", "tok", opener=opener)
 
 
 def test_normalize():

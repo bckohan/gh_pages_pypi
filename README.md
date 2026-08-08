@@ -100,6 +100,12 @@ config instead of a repository:
 repositories:
   - yourorg/lib-one
   - yourorg/lib-two
+  - yourorg/tools-*                     # optional — an fnmatch pattern in the
+                                        #   name half stands for every matching
+                                        #   repo the token can read
+exclude_repositories:                   # optional — subtracts from pattern
+  - yourorg/tools-legacy                #   expansions only; a repo named
+                                        #   explicitly above is always indexed
 title: yourorg package index            # optional
 url: https://yourorg.github.io/pypi/    # optional — enables the absolute
                                         # --extra-index-url example on the
@@ -123,7 +129,9 @@ ghr-pypi index --config index.yml --out site
 
 Any wheel or sdist attached to any (non-draft) release on any configured
 repository is included. If two repositories publish the same filename, the
-first repository in the list wins and a warning is printed.
+first repository in the list wins and a warning is printed. A pattern's
+matches are sorted and spliced in where the pattern stands, so an entry
+listed above it still wins that tie-break.
 
 GitHub's API supplies a sha256 digest for release assets uploaded since
 mid-2025, which the builder uses directly — those files are never
@@ -326,8 +334,9 @@ just release
   Use names that don't exist on pypi.org, or `--index-url` for your index
   only.
 - Release assets on public repos are public; this is not a private index.
-- The GitHub API returns at most 100 releases per page and the tool reads
-  one page.
+- A `yourorg/*` pattern on a personal account finds *public* repositories
+  only — GitHub has no endpoint that lists someone's private ones. List
+  private repositories explicitly.
 - This repo's own index also lists `ghr-pypi` itself: the PyPI
   release workflow attaches the tool's wheels to GitHub Releases, and the
   index builder indexes every non-draft release — deliberate dogfooding.

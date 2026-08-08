@@ -1,0 +1,33 @@
+{
+  "planPath": ".agents/docs/superpowers/plans/2026-08-08-organization-expansion.md",
+  "tasks": [
+    {
+      "id": 0,
+      "subject": "Task 1: _paginate and paginated fetch_releases",
+      "status": "completed",
+      "description": "**Goal:** one paginated-GET helper; fetch_releases no longer stops at 100 releases.\n\n**Verify:** uv run pytest tests/test_index.py -q && just check-types\n\n```json:metadata\n{\"files\": [\"src/ghr_pypi/index.py\", \"tests/test_index.py\"], \"verifyCommand\": \"uv run pytest tests/test_index.py -q && just check-types\", \"acceptanceCriteria\": [\"_paginate returns every item\", \"stops on a short page including the empty-page boundary\", \"page cap raises PaginationError\", \"fetch_releases reads beyond page 1\", \"no existing test edited\"]}\n```"
+    },
+    {
+      "id": 1,
+      "subject": "Task 2: config patterns and exclude_repositories",
+      "status": "completed",
+      "blockedBy": [0],
+      "description": "**Goal:** OWNER/PATTERN entries validate, owner-half patterns rejected, exclude_repositories loads.\n\n**Verify:** uv run pytest tests/test_config.py -q && just check-types\n\n```json:metadata\n{\"files\": [\"src/ghr_pypi/config.py\", \"tests/test_config.py\"], \"verifyCommand\": \"uv run pytest tests/test_config.py -q && just check-types\", \"acceptanceCriteria\": [\"is_pattern covers * ? [\", \"check_repository rejects owner-half patterns\", \"exclude_repositories loads and validates\", \"duplicate-literal check unchanged\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 3: fetch_repositories and CLI expansion",
+      "status": "completed",
+      "blockedBy": [1],
+      "description": "**Goal:** patterns expand against the GitHub API, in place, with exclusions and reporting.\n\n**Verify:** just test\n\n```json:metadata\n{\"files\": [\"src/ghr_pypi/index.py\", \"src/ghr_pypi/cli.py\", \"tests/test_index.py\", \"tests/test_cli.py\"], \"verifyCommand\": \"just test\", \"acceptanceCriteria\": [\"orgs endpoint with 404 fallback to users\", \"matches spliced in place, sorted\", \"one listing per owner\", \"exclusions apply to expansions only\", \"case-insensitive fnmatchcase\", \"zero matches exits 1\", \"expansion reported on stderr\", \"dedupe first-wins\", \"env var pattern rejected\", \"mutation-proven\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 4: docs and full gate",
+      "status": "completed",
+      "blockedBy": [2],
+      "description": "**Goal:** patterns, exclusions and full pagination documented; the four one-page claims corrected.\n\n**Verify:** just check-all\n\n```json:metadata\n{\"files\": [\"doc/source/reference/configuration.rst\", \"doc/source/reference/cli.rst\", \"doc/source/index.rst\", \"doc/source/how-to/aggregate-repositories.rst\", \"doc/source/how-to/build-failed.rst\", \"doc/source/how-to/index-an-organization.rst\", \"doc/source/how-to/index.rst\", \"doc/source/changelog.rst\", \"README.md\", \"direction.md\"], \"verifyCommand\": \"just check-all\", \"acceptanceCriteria\": [\"no one-page release claim remains\", \"configuration.rst documents patterns and exclude_repositories with verbatim errors\", \"cli.rst documents quoting\", \"new how-to covers the user-account limitation and cost\", \"index.rst bullet deleted\", \"direction.md bullet removed\", \"just check-all exit 0\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-08-08"
+}

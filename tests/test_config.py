@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from ghr_pypi.config import Config, ConfigError, Filters, load
+from ghr_pypi.config import Config, ConfigError, Filters, is_pattern, load
 
 
 def write(tmp_path: Path, text: str) -> Path:
@@ -306,3 +306,83 @@ def test_load_non_utf8(tmp_path):
     cfg.write_bytes(b"\xff\xfe repositories: [a/b]")
     with pytest.raises(ConfigError, match="not valid UTF-8"):
         load(cfg)
+
+
+@pytest.mark.parametrize(
+    "name,expected",
+    [
+        ("plain", False),
+        ("has-dash", False),
+        ("*", True),
+        ("lib-*", True),
+        ("lib-?", True),
+        ("lib-[ab]", True),
+    ],
+)
+def test_is_pattern(name, expected):
+    assert is_pattern(name) is expected
+
+
+def test_repositories_accept_patterns(tmp_path):
+    cfg = write(tmp_path, "repositories: [yourorg/*, yourorg/lib-*, other/one]\n")
+    assert load(cfg).repositories == ("yourorg/*", "yourorg/lib-*", "other/one")
+
+
+@pytest.mark.parametrize("owner", ["*", "a-[x]"])
+def test_repositories_reject_a_pattern_in_the_owner(tmp_path, owner):
+    cfg = write(tmp_path, f"repositories: ['{owner}/thing']\n")
+    with pytest.raises(ConfigError, match="may not use a pattern in the owner"):
+        load(cfg)
+
+
+def test_exclude_repositories_defaults_to_empty(tmp_path):
+    cfg = write(tmp_path, "repositories: [a/b]\n")
+    assert load(cfg).exclude_repositories == ()
+
+
+def test_exclude_repositories_loads(tmp_path):
+    cfg = write(tmp_path, "repositories: [a/*]\nexclude_repositories: [a/secret-*]\n")
+    assert load(cfg).exclude_repositories == ("a/secret-*",)
+
+
+def test_exclude_repositories_explicit_null_treated_as_omitted(tmp_path):
+    cfg = write(tmp_path, "repositories: [a/b]\nexclude_repositories:\n")
+    assert load(cfg).exclude_repositories == ()
+
+
+@pytest.mark.parametrize(
+    "body,message",
+    [
+        (
+            "repositories: [a/b]\nexclude_repositories: nope\n",
+            "'exclude_repositories' must be a list",
+        ),
+        (
+            "repositories: [a/b]\nexclude_repositories: [5]\n",
+            "is not OWNER/NAME",
+        ),
+        (
+            "repositories: [a/b]\nexclude_repositories: ['*/x']\n",
+            "may not use a pattern in the owner",
+        ),
+        (
+            "repositories: [a/b]\nexclude_repositories: false\n",
+            "'exclude_repositories' must be a list",
+        ),
+        (
+            "repositories: [a/b]\nexclude_repositories: 0\n",
+            "'exclude_repositories' must be a list",
+        ),
+        (
+            "repositories: [a/b]\nexclude_repositories: ''\n",
+            "'exclude_repositories' must be a list",
+        ),
+        (
+            "repositories: [a/b]\nexclude_repositories: {}\n",
+            "'exclude_repositories' must be a list",
+        ),
+    ],
+)
+def test_exclude_repositories_errors(tmp_path, body, message):
+    with pytest.raises(ConfigError, match=message):
+        load(write(tmp_path, body))

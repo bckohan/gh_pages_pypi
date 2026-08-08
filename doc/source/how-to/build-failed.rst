@@ -34,8 +34,10 @@ The releases were read successfully and contained nothing indexable. In order of
 * **``missing_digest: omit`` removed everything.** Each dropped file warns
   ``... has no digest, omitted (missing_digest=omit)``. Switch to ``download`` or
   ``no-fragment``.
-* **The repository has more than 100 releases.** One page is read, newest first, so old
-  releases fall off the end. That empties an index only if every recent release is asset-less.
+* **Nothing was ever released.** Tags are not releases — a pushed tag publishes nothing to
+  the releases API. Check with ``gh release list``. A ``yourorg/*`` pattern makes this easy
+  to hit, because it pulls in every repository the token can read whether or not it
+  publishes packages; the index is empty only when *none* of them do.
 
 The other error lines
 =====================
@@ -72,6 +74,29 @@ The other error lines
    The same repository was passed twice on the command line (the comparison
    ignores case). There is no such check across sources — an argument that
    differs only in case from ``GITHUB_REPOSITORY`` is taken as given.
+
+``error: no repositories matched 'yourorg/lib-*'``
+   A pattern expanded to nothing: no repository in that owner matches, or the token cannot
+   see the ones that do. A personal account is the usual surprise — only its public
+   repositories are listed at all, so a private one has to be named in full. See
+   :ref:`howto-org-user-accounts`.
+
+``error: every repository matching 'yourorg/lib-*' is excluded by exclude_repositories``
+   The pattern matched, and ``exclude_repositories`` then removed every match. Narrow one
+   or the other; a repository named explicitly is never removed this way.
+
+``error: 'yourorg' is not a visible organization or user``
+   The owner half of a pattern is not an account this token can see (GitHub answers 404 for
+   accounts a token cannot see, exactly as it does for repositories). Only patterns can
+   raise this — an explicit ``OWNER/NAME`` fails later, when its releases are fetched.
+
+``error: GITHUB_REPOSITORY 'yourorg/*' may not be a pattern``
+   The environment variable names one repository, never a set of them. Put the pattern in
+   the config file's ``repositories`` or in a positional argument.
+
+``error: listing repositories failed: ...``
+   Expanding a pattern needs a repository listing, and that request failed — bad or
+   under-scoped token, rate limiting, or a network failure.
 
 ``error: with --config, set 'mirror' in the config file``
    ``--mirror`` is a flag of the command line form only; with a config file it is a key.

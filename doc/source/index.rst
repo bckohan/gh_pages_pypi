@@ -118,8 +118,6 @@ When not to use it
 - **Private repositories without** ``mirror: true``. Direct asset URLs require an
   ``Authorization`` header that pip will not send. Mirror the files into the site instead and
   put the site behind whatever authentication your host offers.
-- **More than 100 releases in a repository.** One page of the GitHub API is read, so older
-  releases fall off the end without an error. Split the repository or run a real index.
 - **Anything needing an upload API.** There is no ``twine upload`` and no delete. Yanking and
   excluding are configuration, not API calls — the only way to change the index is to rebuild
   and redeploy it.

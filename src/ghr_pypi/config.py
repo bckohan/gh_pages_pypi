@@ -25,6 +25,7 @@ _KNOWN_KEYS = {
     "metadata",
     "yanked",
     "exclude",
+    "exclude_repositories",
 }
 
 
@@ -46,6 +47,30 @@ def check_slug(value: Any, label: str) -> None:
     parts = value.split("/") if isinstance(value, str) else []
     if len(parts) != 2 or not all(parts):
         raise ConfigError(f"{label} {value!r} is not OWNER/NAME")
+
+
+_PATTERN_CHARS = "*?["
+
+
+def is_pattern(name: str) -> bool:
+    """Return True when a repository name half is an ``fnmatch`` pattern.
+
+    The character set is exactly what ``fnmatch`` treats as special — testing
+    only for ``*`` and ``?`` would silently read ``yourorg/lib-[ab]`` as a
+    literal repository name.
+    """
+    return any(char in name for char in _PATTERN_CHARS)
+
+
+def check_repository(value: Any, label: str) -> None:
+    """Raise ``ConfigError`` unless ``value`` is ``OWNER/NAME`` or ``OWNER/PATTERN``.
+
+    The owner half may never be a pattern: there is no GitHub endpoint for
+    "every organization I can see".
+    """
+    check_slug(value, label)
+    if is_pattern(value.split("/")[0]):
+        raise ConfigError(f"{label} {value!r} may not use a pattern in the owner")
 
 
 def _normalize(name: str) -> str:
@@ -161,6 +186,7 @@ class Config:
     mirror: bool = False
     metadata: bool = True
     filters: Filters = NO_FILTERS
+    exclude_repositories: tuple[str, ...] = ()
 
 
 def _yanked(path: Path, raw: Any) -> dict[str, dict[str, str | bool]]:
@@ -273,10 +299,19 @@ def load(path: Path) -> Config:
         if not isinstance(raw_repositories, list) or not raw_repositories:
             raise ConfigError(f"{path}: 'repositories' must be a non-empty list")
         for repo in raw_repositories:
-            check_slug(repo, f"{path}: repository")
+            check_repository(repo, f"{path}: repository")
         if len({r.casefold() for r in raw_repositories}) != len(raw_repositories):
             raise ConfigError(f"{path}: 'repositories' contains duplicates")
         repositories = raw_repositories
+    exclude_repositories: list[Any] = []
+    if (raw_exclude := raw.get("exclude_repositories")) is not None:
+        if not isinstance(raw_exclude, list):
+            raise ConfigError(
+                f"{path}: 'exclude_repositories' must be a list of patterns"
+            )
+        exclude_repositories = raw_exclude
+    for pattern in exclude_repositories:
+        check_repository(pattern, f"{path}: exclude_repositories entry")
     templates = None
     if (raw_templates := raw.get("templates")) is not None:
         if not isinstance(raw_templates, str):
@@ -333,4 +368,5 @@ def load(path: Path) -> Config:
         mirror=mirror,
         metadata=metadata,
         filters=filters,
+        exclude_repositories=tuple(exclude_repositories),
     )

@@ -1,11 +1,12 @@
 import json
+import urllib.error
 import zipfile
 
 import pytest
 from typer.testing import CliRunner
 
 from ghr_pypi import index
-from ghr_pypi.cli import _resolve_config, app
+from ghr_pypi.cli import _expand_patterns, _resolve_config, app
 from ghr_pypi.config import ConfigError
 from tests.test_index import FILTER_RELEASES, FIXTURE_RELEASES
 
@@ -792,3 +793,242 @@ def test_bare_invocation_prints_help():
     result = runner.invoke(app, [])
     assert result.exit_code != 0
     assert "extract-meta" in all_output(result)
+
+
+def fake_listing(monkeypatch, **owners):
+    """Stub index.fetch_repositories, recording how many times each owner is listed."""
+    calls = []
+
+    def lister(owner, token, **kwargs):
+        calls.append(owner)
+        return list(owners[owner])
+
+    monkeypatch.setattr(index, "fetch_repositories", lister)
+    return calls
+
+
+def test_expand_splices_matches_in_place(monkeypatch):
+    # explicit entries on both sides: an expansion that appended instead of
+    # splicing would still satisfy the leading entry, so the trailing one is
+    # what actually pins the ordering guarantee
+    fake_listing(monkeypatch, org=["org/beta", "org/alpha"])
+    assert _expand_patterns(("first/explicit", "org/*", "z/explicit"), (), "tok") == (
+        "first/explicit",
+        "org/alpha",
+        "org/beta",
+        "z/explicit",
+    )
+
+
+def test_expand_lists_each_owner_once(monkeypatch):
+    calls = fake_listing(monkeypatch, Org=["org/lib-a", "org/app-b"])
+    # mixed-case owners are the same owner to GitHub; one listing must serve both
+    assert _expand_patterns(("Org/lib-*", "org/app-*"), (), "tok") == (
+        "org/lib-a",
+        "org/app-b",
+    )
+    assert calls == ["Org"]
+
+
+def test_expand_is_case_insensitive(monkeypatch):
+    fake_listing(monkeypatch, org=["org/LibOne"])
+    assert _expand_patterns(("org/lib*",), (), "tok") == ("org/LibOne",)
+
+
+def test_expand_case_insensitivity_covers_the_pattern(monkeypatch):
+    fake_listing(monkeypatch, org=["org/libone"])
+    assert _expand_patterns(("org/Lib*",), (), "tok") == ("org/libone",)
+
+
+def test_expand_applies_exclusions(monkeypatch):
+    fake_listing(monkeypatch, org=["org/keep", "org/secret-x"])
+    assert _expand_patterns(("org/*",), ("org/secret-*",), "tok") == ("org/keep",)
+
+
+def test_expand_exclusions_are_case_insensitive(monkeypatch):
+    fake_listing(monkeypatch, org=["org/keep", "org/Secret-X"])
+    assert _expand_patterns(("org/*",), ("ORG/secret-*",), "tok") == ("org/keep",)
+
+
+def test_expand_never_excludes_an_explicit_entry(monkeypatch):
+    fake_listing(monkeypatch, org=["org/other"])
+    assert _expand_patterns(("org/secret-x", "org/*"), ("org/secret-*",), "tok") == (
+        "org/secret-x",
+        "org/other",
+    )
+
+
+def test_expand_deduplicates_overlapping_patterns(monkeypatch):
+    fake_listing(monkeypatch, org=["org/lib-a"])
+    assert _expand_patterns(("org/*", "org/lib-*"), (), "tok") == ("org/lib-a",)
+
+
+def test_expand_reports_only_newly_added_repositories(monkeypatch, capsys):
+    # the second pattern re-matches what the first already claimed; reporting
+    # its match count would promise more repositories than end up indexed
+    fake_listing(monkeypatch, org=["org/lib-a", "org/lib-b", "org/app-c"])
+    assert _expand_patterns(("org/*", "org/lib-*"), (), "tok") == (
+        "org/app-c",
+        "org/lib-a",
+        "org/lib-b",
+    )
+    # capsys, not CliRunner: this asserts on stderr *specifically*, so dropping
+    # err=True fails here. result.stderr cannot do that portably -- click < 8.2
+    # merges the streams by default and raises on .stderr, which is why
+    # all_output() exists, and the lowest-direct CI leg resolves such a click.
+    captured = capsys.readouterr()
+    assert "expanded 'org/*' to 3 repositories" in captured.err
+    assert "expanded 'org/lib-*' to 0 repositories" in captured.err
+    assert "expanded" not in captured.out
+
+
+def test_expand_rejects_a_pattern_matching_nothing(monkeypatch):
+    fake_listing(monkeypatch, org=["org/one"])
+    with pytest.raises(ConfigError, match="no repositories matched 'org/zzz-\\*'"):
+        _expand_patterns(("org/zzz-*",), (), "tok")
+
+
+def test_expand_distinguishes_fully_excluded_from_unmatched(monkeypatch):
+    # blaming the pattern here would send the user hunting for a typo in a
+    # pattern that matched fine; the exclusion is what emptied it
+    fake_listing(monkeypatch, org=["org/one"])
+    with pytest.raises(ConfigError, match="every repository matching 'org/\\*'"):
+        _expand_patterns(("org/*",), ("org/*",), "tok")
+
+
+def test_expand_names_an_owner_that_does_not_exist(monkeypatch):
+    def missing(owner, token, **kwargs):
+        raise urllib.error.HTTPError(f"https://api/{owner}", 404, "nope", {}, None)
+
+    monkeypatch.setattr(index, "fetch_repositories", missing)
+    with pytest.raises(ConfigError, match="'typo' is not a visible organization"):
+        _expand_patterns(("typo/*",), (), "tok")
+
+
+def test_expand_reraises_a_non_404_listing_error(monkeypatch):
+    def forbidden(owner, token, **kwargs):
+        raise urllib.error.HTTPError(f"https://api/{owner}", 403, "no", {}, None)
+
+    monkeypatch.setattr(index, "fetch_repositories", forbidden)
+    with pytest.raises(urllib.error.HTTPError):
+        _expand_patterns(("org/*",), (), "tok")
+
+
+def test_expand_reports_each_expansion(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        index, "fetch_repositories", lambda owner, token, **kw: ["org/one"]
+    )
+    monkeypatch.setattr(index, "fetch_releases", fetch_stub(FIXTURE_RELEASES))
+    monkeypatch.setattr(index, "hash_url", lambda url: "cafef00d")
+    result = runner.invoke(app, ["index", "org/*", "--token", "x"])
+    assert result.exit_code == 0, all_output(result)
+    assert "expanded 'org/*' to 1 repositories" in all_output(result)
+
+
+def releases_with(name, url_repo):
+    """A one-release payload shipping a single wheel named ``name``."""
+    return [
+        {
+            "tag_name": "v1.0.0",
+            "assets": [
+                {
+                    "name": name,
+                    "browser_download_url": (
+                        f"https://github.com/{url_repo}/releases/download/v1.0.0/{name}"
+                    ),
+                },
+            ],
+        },
+    ]
+
+
+def test_cli_config_excludes_repositories_from_an_expansion(tmp_path, monkeypatch):
+    # end-to-end: proves build_index actually hands exclude_repositories to
+    # _expand_patterns. A unit test on _expand_patterns cannot see that wiring.
+    monkeypatch.setattr(
+        index,
+        "fetch_repositories",
+        lambda owner, token, **kw: ["org/public", "org/secret-internal"],
+    )
+    by_repo = {
+        "org/public": releases_with("keeper-1.0.0-py3-none-any.whl", "org/public"),
+        "org/secret-internal": releases_with(
+            "hushhush-1.0.0-py3-none-any.whl", "org/secret-internal"
+        ),
+    }
+    monkeypatch.setattr(
+        index, "fetch_releases", lambda repo, token: [dict(r) for r in by_repo[repo]]
+    )
+    monkeypatch.setattr(index, "hash_url", lambda url: "cafef00d")
+    cfg = config_file(
+        tmp_path,
+        "repositories: [org/*]\nexclude_repositories: [org/secret-*]\n",
+    )
+    out = tmp_path / "site"
+    result = runner.invoke(
+        app, ["index", "--config", str(cfg), "--out", str(out), "--token", "x"]
+    )
+    assert result.exit_code == 0, all_output(result)
+    assert (out / "simple" / "keeper").is_dir()
+    assert not (out / "simple" / "hushhush").exists()
+    assert "wrote index for 1 project(s)" in result.output
+
+
+def test_cli_expansion_order_decides_a_duplicate_filename(tmp_path, monkeypatch):
+    # the whole reason expansions are sorted and spliced in place: duplicate
+    # filenames across repositories resolve first-occurrence-wins, so the
+    # alphabetically-first repository's copy is the one that gets indexed
+    duplicate = "twinned-1.0.0-py3-none-any.whl"
+    monkeypatch.setattr(
+        index,
+        "fetch_repositories",
+        lambda owner, token, **kw: ["org/zeta", "org/alpha"],
+    )
+    monkeypatch.setattr(
+        index,
+        "fetch_releases",
+        lambda repo, token: [dict(r) for r in releases_with(duplicate, repo)],
+    )
+    monkeypatch.setattr(index, "hash_url", lambda url: "cafef00d")
+    out = tmp_path / "site"
+    result = runner.invoke(app, ["index", "org/*", "--out", str(out), "--token", "x"])
+    assert result.exit_code == 0, all_output(result)
+    page = (out / "simple" / "twinned" / "index.html").read_text()
+    assert "org/alpha/releases" in page
+    assert "org/zeta/releases" not in page
+    assert f"duplicate asset {duplicate} ignored" in all_output(result)
+
+
+def test_resolve_rejects_a_pattern_in_the_environment():
+    with pytest.raises(ConfigError, match="may not be a pattern"):
+        resolve(env_repo="org/*")
+
+
+def test_resolve_accepts_a_pattern_argument():
+    assert resolve(["org/*"]).repositories == ("org/*",)
+
+
+def test_cli_reports_a_pattern_matching_nothing(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        index, "fetch_repositories", lambda owner, token, **kw: ["org/one"]
+    )
+    result = runner.invoke(
+        app, ["index", "org/zzz-*", "--out", str(tmp_path), "--token", "x"]
+    )
+    assert result.exit_code == 1
+    assert "no repositories matched 'org/zzz-*'" in all_output(result)
+
+
+def test_cli_reports_a_listing_failure(tmp_path, monkeypatch):
+    import urllib.error
+
+    def boom(owner, token, **kwargs):
+        raise urllib.error.URLError("no route to host")
+
+    monkeypatch.setattr(index, "fetch_repositories", boom)
+    result = runner.invoke(
+        app, ["index", "org/*", "--out", str(tmp_path), "--token", "x"]
+    )
+    assert result.exit_code == 1
+    assert "listing repositories failed" in all_output(result)

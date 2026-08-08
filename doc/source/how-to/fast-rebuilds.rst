@@ -34,8 +34,9 @@ are never downloaded — the digest goes straight into the ``#sha256=`` fragment
 
    missing_digest: no-fragment
 
-Everything else in link mode is one API request per repository, so a build over a dozen
-repositories with modern assets takes seconds.
+Everything else in link mode is roughly one API request per repository — plus one more per
+100 releases it has, and one per owner whose repositories a pattern has to list — so a build
+over a dozen repositories with modern assets takes seconds.
 
 Mirror mode: cache the files directory
 ======================================
@@ -66,8 +67,9 @@ Smaller odds and ends
 * ``formats: [html]`` or ``formats: [json]`` halves the number of files written.
 * ``metadata: false`` skips opening every mirrored wheel to extract its core metadata — worth
   it only if you do not want :pep:`658` metadata at all.
-* Only the first page of releases is read (100 per repository, newest first). Beyond that,
-  older releases silently fall off the end of the index rather than slowing anything down.
+* Releases are read in full, 100 per API request, so a long release history costs one extra
+  request per 100 releases. ``yanked`` and ``exclude`` do not shorten that — they filter after
+  the fetch — but API calls are the cheap part of a build.
 
 Next
 ====

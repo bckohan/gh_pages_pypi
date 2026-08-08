@@ -7,6 +7,11 @@ Changelog
 --------
 
 * Support yank/exclude.
+* ``repositories`` entries may use an ``fnmatch`` pattern in the name half —
+  ``yourorg/*`` indexes every repository the token can read in that owner — with
+  a new ``exclude_repositories`` key to subtract from expansions.
+* Every GitHub list endpoint is now paginated: repositories with more than 100
+  releases are read in full.
 * The positional ``REPO`` argument takes zero or more repositories and defaults
   to ``$GITHUB_REPOSITORY``; ``--out`` defaults to ``_site`` and the config
   file's ``repositories`` key is optional. A GitHub Pages workflow can now run

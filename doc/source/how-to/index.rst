@@ -7,9 +7,10 @@ How-To Guides
 =============
 
 Answers to the questions that come up once the index is running: how to serve a private
-repository, how to aggregate several repositories, how to make rebuilds fast, how to pull a
-bad release, why a build failed. Each guide states the problem as a question, answers it, and
-shows the commands or configuration that get you there — they assume you already know what the
+repository, how to aggregate several repositories, how to index an entire organization, how to
+make rebuilds fast, how to pull a bad release, why a build failed. Each guide states the
+problem as a question, answers it, and shows the commands or configuration that get you
+there — they assume you already know what the
 tool does. If you do not, start with the :ref:`tutorials <tutorials>`; for the exhaustive list
 of options, see the :ref:`reference <reference>`.
 
@@ -19,6 +20,7 @@ of options, see the :ref:`reference <reference>`.
 
    private-repository
    aggregate-repositories
+   index-an-organization
    customize-pages
    fast-rebuilds
    publish-metadata

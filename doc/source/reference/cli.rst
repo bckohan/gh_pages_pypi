@@ -77,6 +77,40 @@ One or more repositories
 Each argument is a bare ``OWNER/NAME`` slug — not a URL, not a clone path.
 Repeating one, ignoring case, is an error.
 
+The name half may instead be an ``fnmatch`` pattern (``*``, ``?``, ``[seq]``),
+which expands to every matching repository the token can read in that owner:
+
+.. code-block:: sh
+
+   ghr-pypi index 'yourorg/*' --out site
+   ghr-pypi index yourorg/lib-one 'yourorg/tools-*' --out site
+
+**The quotes are required.** Unquoted, ``yourorg/*`` is a shell glob before it is
+an argument, and what happens next depends on the shell and the working
+directory. ``zsh`` aborts with "no matches found" before ``ghr-pypi`` runs.
+``bash`` passes an unmatched glob through unchanged, so it works by accident.
+``bash`` with ``nullglob`` set drops the argument entirely, leaving
+``error: provide REPO..., set GITHUB_REPOSITORY, or use --config`` — or, inside
+Actions, a silent fall back to ``$GITHUB_REPOSITORY``. And in a
+directory that happens to contain a ``yourorg/`` subdirectory, every shell
+expands the glob to those local paths, which then reach the API as literal
+repository names. Single quotes, double quotes or a backslash escape all settle
+the question.
+
+The owner half is never a pattern: there is no GitHub endpoint for "every
+organization I can see". Matches are sorted and spliced in where the pattern
+stood — so the explicit ``yourorg/lib-one`` above still wins a duplicate-filename
+tie-break against anything ``yourorg/tools-*`` pulls in — under the rules given
+for :ref:`config-repositories`. Each expansion prints one line on stderr::
+
+   expanded 'yourorg/tools-*' to 3 repositories
+
+The count is how many repositories that pattern *newly added*, not how many it
+matched, so the second of two overlapping patterns can legitimately report ``0``.
+
+Subtracting from an expansion needs a config file — ``exclude_repositories``
+has no command line equivalent. See :ref:`howto-index-an-organization`.
+
 Defaults shared by both command line forms
 ------------------------------------------
 
@@ -107,8 +141,9 @@ Configuration file
 
 Required for indexing more than one repository from a fixed list, and the only
 way to set ``title``, ``url``, ``templates``, ``formats``, ``missing_digest``,
-or ``metadata``. See :ref:`configuration` for every key. Repositories must be
-listed in the file, not on the command line — passing both is an error, though
+``metadata``, or ``exclude_repositories``. See :ref:`configuration` for every
+key. Repositories must be listed in the file, not on the command line — passing
+both is an error, though
 ``GITHUB_REPOSITORY`` may be set alongside a config file and is used only when
 the file omits ``repositories``. ``--mirror`` is rejected in this form — set
 ``mirror: true`` in the file instead, so that the file remains the whole
@@ -138,11 +173,15 @@ omits ``url`` — because the repository running the build is the host. Set
    clear the directory first.
 
 ``REPO...``
-   Zero or more repositories to index, each as ``OWNER/NAME``. Defaults to the
+   Zero or more repositories to index, each as ``OWNER/NAME``. The name half may
+   be an ``fnmatch`` pattern — ``ghr-pypi index 'yourorg/*'`` indexes every
+   repository the token can read in that owner. **Quote the pattern**, so the
+   shell does not try to glob it against the working directory; the owner half
+   may never be a pattern. Defaults to the
    ``GITHUB_REPOSITORY`` environment variable, which is validated whenever it is
    set — even when the repositories come from elsewhere — so that a broken
-   environment fails before any network request. An empty value counts as
-   unset. Must not be combined with ``--config``.
+   environment fails before any network request. It may not itself be a pattern.
+   An empty value counts as unset. Must not be combined with ``--config``.
 
 ``--config PATH``
    Path to the YAML configuration file. Its ``repositories`` key replaces the
@@ -286,6 +325,15 @@ The checks below run in this order; the first one that fails ends the run.
    environment fails before any network request. An empty value counts as unset
    and is not an error.
 
+``error: GITHUB_REPOSITORY '...' may not be a pattern``
+   The environment variable contains ``*``, ``?`` or ``[``. It names the one
+   repository the build is running in, so there is nothing for a pattern to
+   mean there — and a value arriving from the environment is exactly where a
+   silently expanded glob would be hardest to notice. Patterns belong in a
+   positional argument or in the config file's ``repositories``. Checked
+   whenever the variable is set, even when the repositories come from
+   elsewhere.
+
 ``error: with --config, list repositories in the config file``
    Positional ``REPO`` arguments were combined with ``--config``. Setting
    ``GITHUB_REPOSITORY`` does not trigger this.
@@ -305,6 +353,11 @@ The checks below run in this order; the first one that fails ends the run.
    A positional ``REPO`` is not exactly two non-empty ``/``-separated parts. Passing a URL
    such as ``https://github.com/yourorg/repo`` fails here.
 
+``error: repository '...' may not use a pattern in the owner``
+   A positional ``REPO`` puts ``*``, ``?`` or ``[`` in the half before the ``/``.
+   Only the name half may be a pattern. The config file raises the same message
+   prefixed with its path.
+
 ``error: repository '...' given more than once``
    The same repository was passed twice on the command line; the comparison
    ignores case. There is no equivalent check across sources — an argument that
@@ -313,10 +366,39 @@ The checks below run in this order; the first one that fails ends the run.
 ``error: provide REPO..., set GITHUB_REPOSITORY, or use --config``
    No repositories were resolved from any source.
 
+``error: '...' is not a visible organization or user``
+   The owner half of a pattern is not an account this token can see. GitHub
+   answers 404 for accounts a token cannot reach just as it does for
+   repositories, so a typo and a permissions gap look the same. Only patterns
+   reach this check — an explicit ``OWNER/NAME`` is never looked up as an
+   account.
+
+``error: no repositories matched '...'``
+   A pattern expanded to nothing. Either the owner has no matching repository,
+   or the token cannot see the ones it has — on a personal account
+   ``/users/{owner}/repos`` lists **public** repositories only, so a private one
+   is invisible to any pattern; see :ref:`howto-org-user-accounts`.
+
+``error: every repository matching '...' is excluded by exclude_repositories``
+   The pattern matched, and :ref:`config-exclude-repositories` then removed
+   every match, which leaves the pattern saying nothing. Distinct from the
+   message above on purpose: the fix is to narrow one of the two keys, not to
+   go looking for missing repositories.
+
+``error: listing repositories failed: <reason>``
+   Expanding a pattern needs a repository listing and that request failed — a
+   bad or under-scoped token, rate limiting, a network failure, or an owner with
+   more than 10,000 repositories, which the pager refuses to walk rather than
+   silently truncating.
+
 ``error: GitHub API request for <repo> failed: <reason>``
    The releases API call failed — bad or expired token, insufficient permissions, a
    nonexistent or inaccessible repository, rate limiting, or a network failure. The named
-   repository is the one being fetched when the failure occurred.
+   repository is the one being fetched when the failure occurred. Releases are read in full,
+   100 per request; a repository with more than **10,000** of them ends here too, with
+   ``... more than 10000 items; refusing to page further``. That cap exists so a server that
+   never returns a short page cannot spin forever, and it fails rather than truncating,
+   because a quietly short index is worse than a failed build.
 
 ``error: downloading a release asset failed: <reason>``
    An asset download failed. This happens while hashing digest-less assets under
@@ -344,6 +426,10 @@ duplicate filenames across repositories, assets skipped for unsafe names, assets
 under ``missing_digest: omit``, wheels whose core metadata could not be extracted, and the
 per-repository :pep:`658` metadata coverage report. They are worth reading in CI logs — an
 index can be published successfully and still be missing what you expected.
+
+Pattern expansion also reports on stderr, without the ``warning:`` prefix, because it is
+progress rather than a diagnostic — one ``expanded '<pattern>' to N repositories`` line per
+pattern, as described above.
 
 ``extract-meta`` emits no warnings at all; every problem it detects is fatal.
 

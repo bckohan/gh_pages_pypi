@@ -32,6 +32,10 @@ publish rather than something you inspect.
 
    ghr-pypi index --config index.yml --out site
 
+An entry's name half may also be an ``fnmatch`` pattern, so ``yourorg/*`` stands for every
+repository in that owner the token can read and ``yourorg/lib-*`` for a subset of them —
+see :ref:`howto-index-an-organization`.
+
 Every wheel and sdist attached to every non-draft release of every listed repository ends up
 in one flat index, keyed by :pep:`503`-normalized project name. Two repositories publishing
 different projects get one project page each; two publishing the *same* project name share a
@@ -51,9 +55,14 @@ installation token with **Contents: Read-only** on each repository, stored as a 
        GITHUB_TOKEN: ${{ secrets.INDEX_TOKEN }}
      run: uvx ghr-pypi index --config index.yml --out site
 
-The build reads one page of releases per repository, so the config file is usually checked
-into a small dedicated "index" repository whose Pages site (or CDN project) serves the result.
-That workflow does need a checkout — the config file has to be on disk.
+Every release of every listed repository is read — the GitHub API is paged until it runs
+out — so the cost is roughly one API call per repository plus one more per 100 releases in
+any of them, and no package bytes are transferred at all unless an asset predates GitHub's
+asset digests or you are mirroring. A full rebuild is therefore cheap enough to run on every
+release, which is why
+the config file is usually checked into a small dedicated "index" repository whose Pages site
+(or CDN project) serves the result. That workflow does need a checkout — the config file has
+to be on disk.
 
 Collisions and duplicates
 =========================
@@ -73,6 +82,8 @@ Collisions and duplicates
 Next
 ====
 
+* :ref:`howto-index-an-organization` — patterns, ``exclude_repositories``, and what a
+  pattern can and cannot reach on a personal account.
 * :ref:`config-repositories` — the exact constraints and error messages.
 * :ref:`cli` — why ``--mirror`` is refused with ``--config``, and what the command line form
   defaults differently.

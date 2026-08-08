@@ -15,14 +15,15 @@ given with ``--config``. Repositories may not be given both ways at once (see
 The configuration file is the only way to aggregate a fixed list of
 repositories into one index, and the only way to set ``title``, ``url``,
 ``templates``, ``formats``, ``missing_digest``, ``metadata``, ``mirror``,
-``yanked``, or ``exclude``. The command line form supports ``--mirror`` and
-otherwise uses the defaults listed below, except that ``title`` becomes
+``yanked``, ``exclude``, or ``exclude_repositories``. The command line form
+supports ``--mirror`` and otherwise uses the defaults listed below, except that
+``title`` becomes
 ``"<OWNER/NAME> package index"`` when exactly one repository is resolved, and
 ``url`` is derived from a GitHub Pages URL (``https://<owner>.github.io/<name>/``)
 when one can be determined — see
 :ref:`which repository that names, and when there is none <cli-url-derivation>`.
 
-The file is read as YAML and its top level must be a mapping. Only the ten keys documented
+The file is read as YAML and its top level must be a mapping. Only the eleven keys documented
 here are accepted; any other key aborts the build. Every value is validated before any network
 request is made, so a configuration mistake fails immediately and cheaply.
 
@@ -42,9 +43,13 @@ Summary
      - Default
      - Notes
    * - :ref:`config-repositories`
-     - list of ``OWNER/NAME`` strings
+     - list of ``OWNER/NAME`` or ``OWNER/PATTERN``
      - *optional*
      - When present: non-empty, no case-insensitive duplicates
+   * - :ref:`config-exclude-repositories`
+     - list of ``OWNER/NAME`` or ``OWNER/PATTERN``
+     - ``[]``
+     - Subtracts from pattern expansions only; duplicates allowed
    * - :ref:`config-templates`
      - string (path)
      - none
@@ -96,7 +101,8 @@ Keys
           ``--config`` at all.
 :Constraints: When present, must be a non-empty list. Every entry must be a
               string of exactly two non-empty, ``/``-separated parts
-              (``OWNER/NAME``). Entries must be unique when compared
+              (``OWNER/NAME``). The name half may be an ``fnmatch`` pattern;
+              the owner half may not. Entries must be unique when compared
               case-insensitively.
 
 Omitting the key is useful when the file exists only to set ``title``,
@@ -119,6 +125,76 @@ filename, the first occurrence wins and the duplicate is reported on stderr::
    repositories:
      - yourorg/lib-one
      - yourorg/lib-two
+
+An entry's **name** half may be an ``fnmatch`` pattern — ``*``, ``?``, or a ``[seq]``
+character class. The **owner** half may not, because there is no GitHub endpoint for "every
+organization I can see"; ``*/lib`` is rejected before any request is made. A pattern is
+expanded by listing that owner's repositories (``/orgs/{owner}/repos``, falling back to
+``/users/{owner}/repos``) and matching casefolded, so ``yourorg/LIB-*`` matches a repository
+named ``lib-one``. The listing is fetched once per owner and cached case-insensitively, so
+``Yourorg/lib-*`` and ``yourorg/app-*`` in one file page that owner once between them rather
+than twice.
+
+Every repository the token can read is a candidate — **forks and archived repositories
+included**. There is no hidden filter; :ref:`config-exclude-repositories` is the escape hatch.
+What the token can read is not always what the owner has: see
+:ref:`howto-org-user-accounts` before relying on a pattern against a personal account.
+
+Matches are sorted and spliced in **where the pattern stood**, which makes order behavior
+rather than presentation: an explicit entry written above a pattern still wins the
+duplicate-filename tie-break against everything that pattern brings in. Overlapping patterns
+de-duplicate with the first occurrence winning, and every expansion reports on stderr how many
+repositories it *newly added* — so the second of two overlapping patterns can legitimately
+report ``0``::
+
+   expanded 'yourorg/lib-*' to 3 repositories
+
+A pattern that matches nothing is an error, not a silent contribution of nothing; so is a
+pattern whose every match is removed by :ref:`config-exclude-repositories`. Both messages are
+listed in :ref:`cli`, because they are raised while listing repositories rather than while
+validating this file.
+
+.. code-block:: yaml
+
+   repositories:
+     - yourorg/lib-one     # explicit: stays ahead of everything below it
+     - yourorg/tools-*     # every repository whose name starts with tools-
+     - yourorg/*           # ... and the rest of the owner, minus the above
+
+.. _config-exclude-repositories:
+
+``exclude_repositories``
+------------------------
+
+:Type: list of strings
+:Default: ``[]`` — nothing is subtracted
+:Constraints: Must be a list when present; an empty list is fine. Every entry
+              must be ``OWNER/NAME`` or ``OWNER/PATTERN`` under the same rule as
+              :ref:`config-repositories` — the name half may be an ``fnmatch``
+              pattern, the owner half may not. Duplicates are **accepted**.
+
+Subtracts from what a pattern in :ref:`config-repositories` expands to. Each entry is matched
+against the full casefolded ``owner/name`` slug, so it can name a single repository
+(``yourorg/legacy-tool``), a family of them (``yourorg/*-internal``), or reach into another
+owner entirely.
+
+It applies to **expansions only**. A repository named explicitly in ``repositories`` is always
+indexed, even when an exclusion pattern would match it: the explicit entry is the more specific
+statement of intent, and silently dropping it would be a trap rather than a convenience.
+
+An entry that matches nothing is deliberately not an error. A subtraction set is allowed to
+name repositories that do not exist yet, or that this build's patterns never reach; requiring
+each one to bite would make the key fragile for no gain. Duplicate entries are accepted for the
+same reason, even though ``repositories`` rejects them — removing a repository twice removes it
+once.
+
+.. code-block:: yaml
+
+   repositories:
+     - yourorg/*
+   exclude_repositories:
+     - yourorg/*-internal
+     - yourorg/legacy-tool
 
 .. _config-templates:
 
@@ -450,7 +526,7 @@ Validation runs in the order listed, so only the first problem is reported.
    configuration even though every key is optional.
 
 ``{path}: unknown key(s): {names}``
-   **Cause:** the mapping contains keys outside the ten documented above; the sorted list
+   **Cause:** the mapping contains keys outside the eleven documented above; the sorted list
    of offenders is included.
    **Fix:** remove or rename them. Typos such as ``repository:`` or ``mirrors:`` land here.
 
@@ -466,10 +542,34 @@ Validation runs in the order listed, so only the first problem is reported.
    **Fix:** use the bare ``owner/name`` slug, with no URL, no ``.git`` suffix, no trailing
    slash.
 
+``{path}: repository {repo!r} may not use a pattern in the owner``
+   **Cause:** an entry puts an ``fnmatch`` metacharacter (``*``, ``?``, ``[``) in the half
+   before the ``/`` — ``*/lib``, ``your*/lib``. There is no GitHub endpoint for "every
+   organization I can see", so there is nothing to expand it against.
+   **Fix:** name the owner in full. One entry per owner; patterns are a name-half feature.
+
 ``{path}: 'repositories' contains duplicates``
    **Cause:** two entries are equal ignoring case — ``YourOrg/Lib`` and ``yourorg/lib``
-   collide.
-   **Fix:** list each repository once.
+   collide. Patterns are compared as written, so ``yourorg/*`` twice is a duplicate while
+   ``yourorg/*`` and ``yourorg/lib-*`` are not, even though they overlap.
+   **Fix:** list each repository once. Overlapping *patterns* are fine — they de-duplicate at
+   expansion time, first occurrence winning.
+
+``{path}: 'exclude_repositories' must be a list of patterns``
+   **Cause:** ``exclude_repositories`` is present but is not a list — a bare string is the
+   usual mistake. Unlike ``repositories``, an empty list is accepted.
+   **Fix:** write it as a YAML list; a single entry still needs to be one:
+   ``- yourorg/legacy``.
+
+``{path}: exclude_repositories entry {value!r} is not OWNER/NAME``
+   **Cause:** an entry is not a string, or does not split into exactly two non-empty parts on
+   ``/``. A bare name is the usual mistake: exclusions match the whole ``owner/name`` slug, so
+   ``legacy-tool`` is not enough — write ``yourorg/legacy-tool``.
+   **Fix:** give both halves. To exclude by name across an owner, use ``yourorg/legacy-*``.
+
+``{path}: exclude_repositories entry {value!r} may not use a pattern in the owner``
+   **Cause:** as with ``repositories``, the owner half may not contain ``*``, ``?`` or ``[``.
+   **Fix:** name the owner in full, once per owner you need to subtract from.
 
 ``{path}: 'templates' must be a string path``
    **Cause:** ``templates`` is present but is not a string (a list or mapping, typically).
@@ -610,8 +710,9 @@ the other runtime failures in :ref:`cli`.
 Complete example
 ================
 
-Every key, annotated. This configuration mirrors two repositories into a self-contained site
-served from a custom domain, with overridden templates and both output formats.
+Every key, annotated. This configuration mirrors two named repositories and a pattern's worth
+of others into a self-contained site served from a custom domain, with overridden templates
+and both output formats.
 
 .. code-block:: yaml
 
@@ -619,10 +720,19 @@ served from a custom domain, with overridden templates and both output formats.
 
    # Optional. Releases from these repositories are aggregated, in order.
    # On a filename collision the first repository listed wins. Omit the key to
-   # index $GITHUB_REPOSITORY instead.
+   # index $GITHUB_REPOSITORY instead. The name half may be an fnmatch pattern,
+   # whose matches are sorted and spliced in where the pattern stands — so the
+   # two explicit entries below stay ahead of everything tools-* brings in.
    repositories:
      - yourorg/lib-one
      - yourorg/lib-two
+     - yourorg/tools-*
+
+   # Optional. Subtracts from pattern expansions only: yourorg/lib-one would
+   # still be indexed even if an entry here matched it. Entries that match
+   # nothing, and duplicate entries, are both accepted deliberately.
+   exclude_repositories:
+     - yourorg/tools-internal
 
    # Optional. Landing page heading and <title>.
    title: yourorg package index

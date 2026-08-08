@@ -4,13 +4,21 @@ import os
 import urllib.error
 import zipfile
 from dataclasses import replace
+from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
 from ghr_pypi import index
-from ghr_pypi.config import Config, ConfigError, check_slug, load
+from ghr_pypi.config import (
+    Config,
+    ConfigError,
+    check_repository,
+    check_slug,
+    is_pattern,
+    load,
+)
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 
@@ -35,6 +43,8 @@ def _resolve_config(
     env_repo = env_repo or None
     if env_repo is not None:
         check_slug(env_repo, "GITHUB_REPOSITORY")
+        if is_pattern(env_repo):
+            raise ConfigError(f"GITHUB_REPOSITORY {env_repo!r} may not be a pattern")
     repos = list(repos or [])
     if config_path is not None:
         if repos:
@@ -53,7 +63,7 @@ def _resolve_config(
     else:
         seen: set[str] = set()
         for repo in repos:
-            check_slug(repo, "repository")
+            check_repository(repo, "repository")
             if repo.casefold() in seen:
                 raise ConfigError(f"repository {repo!r} given more than once")
             seen.add(repo.casefold())
@@ -82,6 +92,78 @@ def _resolve_config(
             # necessarily the one serving the site.
             url = index.pages_url(repositories[0])
     return replace(cfg, repositories=repositories, url=url)
+
+
+def _expand_patterns(
+    repositories: tuple[str, ...],
+    exclude: tuple[str, ...],
+    token: str,
+) -> tuple[str, ...]:
+    """Expand ``OWNER/PATTERN`` entries by listing each owner's repositories.
+
+    Matches are sorted and spliced where their pattern stood, because duplicate
+    filenames across repositories resolve first-occurrence-wins — order is
+    behavior, not presentation. Exclusions apply to expansions only: a
+    repository named explicitly is always indexed.
+
+    Every comparison is on casefolded strings, including the per-owner listing
+    cache: GitHub owner and repository names are case-insensitive, so
+    ``Org/lib-*`` and ``org/app-*`` must share one listing rather than paginate
+    the same organization twice.
+    """
+    listings: dict[str, list[str]] = {}
+    resolved: list[str] = []
+    seen: set[str] = set()
+
+    def add(repository: str) -> bool:
+        """Append ``repository`` unless already resolved; True when it was new."""
+        if repository.casefold() in seen:
+            return False
+        seen.add(repository.casefold())
+        resolved.append(repository)
+        return True
+
+    for entry in repositories:
+        owner, name = entry.split("/")
+        if not is_pattern(name):
+            add(entry)
+            continue
+        key = owner.casefold()
+        if key not in listings:
+            try:
+                listings[key] = index.fetch_repositories(owner, token)
+            except urllib.error.HTTPError as error:
+                if error.code == 404:
+                    raise ConfigError(
+                        f"{owner!r} is not a visible organization or user"
+                    ) from error
+                raise
+        matched = sorted(
+            found
+            for found in listings[key]
+            if fnmatchcase(found.split("/", 1)[1].casefold(), name.casefold())
+        )
+        if not matched:
+            raise ConfigError(f"no repositories matched {entry!r}")
+        kept = [
+            found
+            for found in matched
+            if not any(
+                fnmatchcase(found.casefold(), pattern.casefold()) for pattern in exclude
+            )
+        ]
+        if not kept:
+            raise ConfigError(
+                f"every repository matching {entry!r} is excluded by "
+                "exclude_repositories"
+            )
+        # count what this pattern actually contributes: reporting the match
+        # count would overstate it when an earlier pattern already claimed some
+        added = 0
+        for found in kept:
+            added += add(found)
+        typer.echo(f"expanded {entry!r} to {added} repositories", err=True)
+    return tuple(resolved)
 
 
 @app.command("index")
@@ -134,6 +216,19 @@ def build_index(
     except ConfigError as error:
         typer.echo(f"error: {error}", err=True)
         raise typer.Exit(1) from error
+    try:
+        cfg = replace(
+            cfg,
+            repositories=_expand_patterns(
+                cfg.repositories, cfg.exclude_repositories, token
+            ),
+        )
+    except ConfigError as error:
+        typer.echo(f"error: {error}", err=True)
+        raise typer.Exit(1) from error
+    except (urllib.error.URLError, index.PaginationError) as error:
+        typer.echo(f"error: listing repositories failed: {error}", err=True)
+        raise typer.Exit(1) from error
     releases = []
     try:
         for current in cfg.repositories:
@@ -142,7 +237,7 @@ def build_index(
                 # fetched payloads are fresh json.load output; safe to tag in place
                 release["_source_repo"] = current
             releases.extend(fetched)
-    except urllib.error.URLError as error:
+    except (urllib.error.URLError, index.PaginationError) as error:
         typer.echo(f"error: GitHub API request for {current} failed: {error}", err=True)
         raise typer.Exit(1) from error
     try:
