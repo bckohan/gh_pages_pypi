@@ -6,6 +6,12 @@ Changelog
 2026.8.X
 --------
 
+* Do not stop at first page of releases.
+* Allow wild card specifiers for repositories within orgs in the config file.
+
+2026.8.8
+--------
+
 * Support yank/exclude.
 * ``repositories`` entries may use an ``fnmatch`` pattern in the name half —
   ``yourorg/*`` indexes every repository the token can read in that owner — with
