@@ -14,7 +14,9 @@ repository = "https://github.com/bckohan/ghr-pypi"
 homepage = "https://ghr-pypi.readthedocs.io"
 keywords = []
 dependencies = [
-    "typer>=0.15",
+    # 0.16 is the first release whose TyperArgument.make_metavar() takes ctx,
+    # as click >= 8.2 requires; older typer TypeErrors on any usage/help render.
+    "typer>=0.16",
     "jinja2>=3.1",
     "pyyaml>=6",
     "packaging>=23",
